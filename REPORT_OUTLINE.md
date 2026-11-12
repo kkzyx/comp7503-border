@@ -1,16 +1,16 @@
-# Compact report outline
+# 精简版项目报告提纲
 
-This is not the finished group report.
+**这只是提纲，不是已经完成的小组报告。** 下列中文说明便于整理内容；最终报告请遵循课程要求。
 
-1. **Use case and scope**: resident arrival/departure clearance at Lo Wu/Lok Ma Chau Spur Line plus outbound HK-resident passenger comparisons across eight land borders; no claim to an end-to-end route optimiser.
-2. **Data sources**: MTR, Immigration and HKO catalogue/dictionary references; polling versus publication frequency; current district rain versus historical station rain.
-3. **Node design**: one editor tab, 70 nodes including configuration and five editor groups. Explain five acquisition branches and shared MongoDB query/display branches for three Dashboard pages. Include an editor screenshot.
-4. **Storage and reproducibility**: five collections, deterministic upsert keys, timestamps, indexes, persistent Docker volumes and 14-day TTL for rail/clearance/current-weather records. Explain the submitted bounded passenger/rainfall dataset, manifest checksums, original dates and non-overwriting startup restore.
-5. **Live Connections**: independent arrival/departure grades on each of the two clearance/train cards, train table, current weather and rail-history chart. Explain stale/missing values, non-service hours and source limitations.
-6. **Passenger & Rainfall**: daily passenger chart/means, 30/90/365-day filters, same-date rainfall join, Pearson r and wet/dry averages. Show actual dates and pair counts; explain the publication lag.
-7. **Border Traffic Trends**: select multiple land borders (up to all eight), compare daily counts over 30/90/365 data dates and actual Monday–Sunday counts for the previous complete Hong Kong calendar week. Show the separate date ranges and weekly coverage; distinguish missing records from published zeros.
-8. **Findings**: use real collected results and screenshots. Correlation is descriptive, not causal or necessarily significant. A near-zero coefficient is a valid finding.
-9. **Validation and limitations**: reproduce the documented tests, acknowledge weather proxies/confounding/ETA horizon, and state what was not tested.
-10. **Deployment and contributions**: exported flow, versioned Docker image/description, historical dataset and restoration steps, private runtime access, group member work and references. The source image repository is public; the running editor should remain private. The original Temperature example is not this project's new contribution.
+1. **应用场景与范围**：罗湖／落马洲支线居民入境、出境通关状态，以及八个陆路口岸香港居民出境客流比较。不声称实现完整路线优化器。
+2. **数据来源**：引用港铁、入境事务处和天文台数据目录／字典；区分项目轮询频率与官方发布频率，区分当前区域雨量与历史雨量站数据。
+3. **节点设计**：一个编辑器标签页，70 个节点（含配置），五个编辑器分组。说明五条采集分支，以及三个 Dashboard 页面共用的 MongoDB 查询和展示分支，附编辑器截图。
+4. **存储与可复现性**：五个集合、确定性 upsert 键、时间戳、索引、持久化 Docker 数据卷，以及列车／通关／当前天气的 14 天 TTL。说明随附的适量历史客流／雨量数据、清单校验值、原始日期及启动时不覆盖已有数据的恢复机制。
+5. **Live Connections（实时接驳）**：两张口岸／列车卡片分别显示入境和出境等级，配合列车表、当前天气和列车历史图。解释过期／缺失值、非服务时段及来源局限。
+6. **Passenger & Rainfall（客流与雨量）**：每日客流图／均值、30 / 90 / 365 个数据日筛选、同日雨量匹配、Pearson r 和有雨／少雨日均值。显示实际日期和配对样本数，解释天气发布滞后。
+7. **Border Traffic Trends（口岸客流趋势）**：最多选择八个陆路口岸，比较最近 30 / 90 / 365 个数据日期的每日人数，以及上一个香港完整自然周的星期一至星期日真实每日人数。分别显示日期范围与周覆盖率，区分缺失记录与官方零值。
+8. **发现与结果**：使用真实采集结果和截图。相关性只是描述，不代表因果或必然具有统计显著性；接近零的系数也是有效发现。
+9. **验证与局限**：复现验证文档中的检查，说明区域天气代理指标、混杂因素、列车预测时间范围等限制，并明确哪些内容尚未测试。
+10. **部署与分工**：说明导出 Flow、带版本的 Docker 镜像／说明、历史数据及恢复方法、运行环境的私有访问方式、小组分工和参考资料。源码与镜像仓库公开，但运行中的编辑器应保持私有。老师原有的 Temperature 示例不是本项目新增贡献。
 
-Submit the flow, Docker Hub ID or Docker description, and the completed report together. Do not describe removed full-version features as implemented in the compact edition.
+提交时将 **Flow、Docker Hub ID 或 Docker 说明，以及完成的报告** 一起整理。不要把完整版中已经删去的功能描述为当前精简版已实现。

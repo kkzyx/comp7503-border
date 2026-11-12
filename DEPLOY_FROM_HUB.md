@@ -1,36 +1,38 @@
-# Deploy the published image
+# 使用已发布镜像部署
 
-Release image: `aazyx774/comp7503-border:1.2.0`. See `VALIDATION.md` for publication and verification status. This release includes a bounded historical dataset as well as the application.
+公开镜像为 `aazyx774/comp7503-border:1.2.0`，包含应用和一份适量的历史数据。发布与验证记录见 [VALIDATION.md](VALIDATION.md)。
 
-## Fresh installation
+## 全新安装
 
-Install Docker with Docker Compose, then put `compose.pull.yaml` and `start-pull.sh` in a new directory. Do not use a directory or Compose project name already used by a different application. The default project name is `comp7503-border`; use a different `COMPOSE_PROJECT_NAME` if necessary.
+先安装 Docker 和 Docker Compose。可以克隆完整仓库，也可以只将 `compose.pull.yaml`、`start-pull.sh` 放入新目录。不要复用其他应用的目录或 Compose 项目名；默认项目名为 `comp7503-border`，有冲突时设置不同的 `COMPOSE_PROJECT_NAME`。
 
-On macOS/Linux, set the image and start both services:
+macOS / Linux 运行：
 
 ```sh
 sh start-pull.sh
 ```
 
-The Compose file defaults to this release; set `BORDER_IMAGE` only to override it. If both images are already installed and the registry is unavailable, use `BORDER_SKIP_PULL=1 sh start-pull.sh`. Windows PowerShell users can run Compose directly:
+Compose 默认使用上述版本，无需设置镜像名；仅在需要其他镜像时设置 `BORDER_IMAGE`。如果两个镜像均已下载但暂时无法访问镜像仓库，可运行 `BORDER_SKIP_PULL=1 sh start-pull.sh`。
+
+Windows PowerShell 可以直接运行：
 
 ```powershell
 docker compose -f compose.pull.yaml pull
 docker compose -f compose.pull.yaml up -d --no-build --wait --wait-timeout 240
 ```
 
-For a private repository, log in with an account granted access before pulling. Open `http://127.0.0.1:1880/ui/`. Set `BORDER_PORT=1882` before starting if 1880 is already occupied. On a remote server, use an SSH tunnel or an authenticated HTTPS reverse proxy; the default port binds only to localhost. MongoDB has no published host port.
+打开 `http://127.0.0.1:1880/ui/`。公开镜像无需 Docker Hub 登录；若自行替换为私有镜像，需先登录有权限的账号。如果 1880 已占用，在启动前设置 `BORDER_PORT=1882`（PowerShell 使用 `$env:BORDER_PORT="1882"`）。远程服务器应使用 SSH 隧道或带认证的 HTTPS 反向代理；默认网页仅绑定本机，MongoDB 不向宿主机发布端口。
 
-## What is included
+## 镜像包含什么
 
-- The application image contains the latest exported flow and its Dashboard/MongoDB node dependencies. MongoDB runs as a separate service on the same Compose network, reachable as `mongodb`.
-- A fresh installation does not require manually importing the flow or installing palette nodes. The entrypoint seeds the flow only when the Node-RED data volume has no `flows.json`.
-- The image includes `dataset/history.json.gz` and its checksum/date manifest. Before Node-RED starts, `seed-history.js` restores missing historical records into MongoDB. Existing records with the same IDs are never replaced. The bundled snapshot contains 3,226 daily departure records across eight land borders (2025-10-01 to 2026-11-11) and 365 Sheung Shui rainfall records (2025-10-01 to 2026-09-30). This supports historical charts and 365 same-date rainfall/passenger pairs without a live API download. See `HISTORICAL_DATA.md`.
-- No credentials, unrelated collections, private backups or old live snapshots are included. Restored acquisition timestamps remain their original values; historical records are not presented as new live observations.
-- When online, passenger/rainfall collectors continue checking official archives and live collectors gather current data. The live train-history chart needs time to accumulate new snapshots. API reachability and publication delays affect current data. An unavailable API produces an error/missing data, not fabricated records.
-- MTR snapshots, clearance snapshots and current weather use 14-day TTL indexes. Daily passenger/rainfall history is not expired. Set `BORDER_SEED_HISTORY=off` under the Node-RED environment only if you deliberately do not want bundled history restored.
+- 最新导出的 Flow，以及 Dashboard / MongoDB 节点依赖。MongoDB 作为同一 Compose 网络中的独立服务运行，内部主机名为 `mongodb`。
+- 全新安装无需导入 Flow 或安装节点。只有当 Node-RED 数据卷不存在 `flows.json` 时，启动入口才会写入初始 Flow。
+- `dataset/history.json.gz` 及日期／校验清单。Node-RED 启动前，`seed-history.js` 会将缺失的历史记录恢复到 MongoDB，相同 ID 的已有记录不会被覆盖。数据包含八个陆路口岸的 **3,226 条每日出境记录（2025-10-01 至 2026-11-11）**，以及 **365 条上水每日雨量记录（2025-10-01 至 2026-09-30）**，无需实时下载即可展示历史图表，并形成 365 组同日雨量／客流配对。详见 [HISTORICAL_DATA.md](HISTORICAL_DATA.md)。
+- 不包含凭据、无关集合、私有备份或旧实时快照。恢复后的采集时间保留原值，不把历史记录伪装成新的实时观测。
+- 联网后继续检查官方客流／雨量历史档案并采集实时数据。列车历史图需要积累新快照。来源连通性和发布延迟会影响当前数据；API 不可达时显示错误／缺失，不生成假数据。
+- 港铁快照、通关快照和当前天气使用 14 天 TTL；每日客流和历史雨量不自动过期。只有明确不需要恢复内置历史时，才在 Node-RED 环境变量中设置 `BORDER_SEED_HISTORY=off`。
 
-## Verify collection
+## 检查是否正常采集
 
 ```sh
 docker compose -f compose.pull.yaml ps
@@ -38,10 +40,10 @@ docker compose -f compose.pull.yaml logs --tail=100 nodered
 docker compose -f compose.pull.yaml exec -T mongodb mongosh --quiet border_insights --eval 'for (const name of ["passengers", "weather", "snapshots", "mtr_snapshots", "weather_live"]) print(name + ": " + db.getCollection(name).countDocuments());'
 ```
 
-Check source timestamps and all three pages. Service health alone does not prove collection succeeded. With external API access blocked, the initial counts should be 3,226 passengers and 365 historical weather records. Online counts may be larger. The weekly bar chart uses the previous complete Hong Kong calendar week, not the latest seven available observations; after the snapshot dates it needs newer source records and may correctly show gaps. Use the independent historical line and rainfall analysis to reproduce the bundled snapshot rather than relabelling old observations as the current week.
+请检查来源时间和三个页面，**容器健康不等于采集成功**。外部 API 被阻断时，初始应有 3,226 条客流和 365 条历史雨量；联网后数量可能增加。周柱状图显示的是香港时间的上一个完整自然周，不是最新七条记录；当快照不覆盖该周时，必须等待新官方数据，留空是正确行为。复现固定快照应使用历史折线和雨量分析，不应将旧日期重标为当前周。
 
-## Existing installation
+## 已有安装如何更新
 
-Changing or pulling an image does not overwrite an existing Node-RED flow volume. To apply the latest flow to an existing installation, keep its working network/security settings and run the supplied `upgrade.sh` with the same Compose options, for example `sh upgrade.sh -f compose.pull.yaml`. Keep `BORDER_IMAGE` set to the chosen version. Never use `down -v` on an installation whose data you want to retain.
+更换或拉取镜像不会覆盖已有 Node-RED 数据卷中的 Flow。若要更新旧安装的流程，保留原网络及安全设置，并使用相同 Compose 参数运行 `upgrade.sh`，例如 `sh upgrade.sh -f compose.pull.yaml`。如需指定镜像，保持 `BORDER_IMAGE` 为所选版本。需要保留数据的部署**禁止使用 `down -v`**。
 
-For submission, include the completed project report, exported flow, `dataset/`, `HISTORICAL_DATA.md`, the exact published image reference and these reproduction instructions. The image and the ZIP both carry the same historical dataset. A live server address alone is not a reproducible submission.
+提交作业时应包含完成的报告、导出 Flow、`dataset/`、`HISTORICAL_DATA.md`、准确镜像版本和复现说明。镜像与 ZIP 携带同一份历史数据；仅提供一个在线服务器地址不能保证可复现。

@@ -1,50 +1,50 @@
-# Historical dataset and grading reproduction
+# 历史数据与评分复现说明
 
-## Public snapshot
+## 公开历史快照
 
-`dataset/history.json.gz` is gzip-compressed UTF-8 JSON, not a complete private database backup. It contains a `metadata` object and `collections.passengers` / `collections.weather` arrays. `dataset/manifest.json` documents SHA-256 checksums, original official source URLs, row counts, date ranges and the export timestamp.
+`dataset/history.json.gz` 是 gzip 压缩的 UTF-8 JSON，**不是整个私有数据库的备份**。其中包含 `metadata` 对象以及 `collections.passengers`、`collections.weather` 数组。`dataset/manifest.json` 记录 SHA-256 校验值、官方来源地址、记录数、日期范围和导出时间。
 
-| Collection | Scope | Dates | Records |
+| 集合 | 数据范围 | 日期 | 记录数 |
 | --- | --- | --- | --- |
-| passengers | Eight land borders; departure only; all published traveller categories retained | 2025-10-01 to 2026-11-11 | 3,226 |
-| weather | Sheung Shui daily rainfall, including original completeness flags | 2025-10-01 to 2026-09-30 | 365 |
+| `passengers` | 八个陆路口岸，仅出境；保留官方发布的各旅客类别 | 2025-10-01 至 2026-11-11 | 3,226 |
+| `weather` | 上水每日雨量，保留原始完整性标记 | 2025-10-01 至 2026-09-30 | 365 |
 
-Archive size: 82,409 bytes; uncompressed JSON: 1,351,166 bytes. Exported on 12 November 2026 UTC. Dates and measurements were taken from real stored official-source records, not generated fixtures. Only whitelisted historical fields are included. There are no login credentials, MongoDB users, HTTP headers, unrelated collections or stale live snapshots.
+压缩包为 82,409 字节，解压后的 JSON 为 1,351,166 字节，导出日期为 UTC 2026 年 11 月 12 日。日期和测量值来自真实存储的官方记录，不是生成的测试数据。只发布白名单内的历史字段，不含登录凭据、MongoDB 用户、HTTP 头、无关集合或过期实时快照。
 
-The rainfall range provides 365 valid same-date passenger/rainfall pairs for Lo Wu and Lok Ma Chau Spur Line at export time. Passenger history extends further to support the latest 365-date line chart and the complete week of 2–8 November 2026. Missing checkpoint dates remain missing; published zeros remain zeros.
+导出时，雨量日期可为罗湖、落马洲支线各提供 365 组有效的同日客流／雨量配对。客流日期更长，以支持最近 365 个数据日期的折线图，以及 2026 年 11 月 2—8 日完整周。缺失的口岸日期仍然缺失，官方发布的零值保留为零。
 
-## Automatic restoration
+## 自动恢复
 
-The `1.2.0` application image includes this dataset. Use `compose.pull.yaml` and `sh start-pull.sh`. MongoDB starts first; the application entrypoint verifies checksums and imports missing records before starting Node-RED. Once both images are available locally, use `BORDER_SKIP_PULL=1 sh start-pull.sh` to skip registry access during an offline start. An internet connection is not needed to restore or analyse the included history, although live collection will correctly report unavailable sources.
+`1.2.0` 镜像已内置数据。使用 `compose.pull.yaml` 和 `sh start-pull.sh` 启动：MongoDB 先启动，应用入口校验哈希并导入缺失记录，然后再启动 Node-RED。两个镜像都已下载后，可以运行 `BORDER_SKIP_PULL=1 sh start-pull.sh` 离线启动，不再访问镜像仓库。恢复和分析内置历史不需要外网；实时采集在离线时会如实报告来源不可用。
 
-Imports use deterministic `_id` values and `$setOnInsert` upserts. Repeated starts do not duplicate records or overwrite an existing database record. Interrupted imports can be repeated safely. Original `date` and `fetchedAt` fields are restored as BSON dates; they are not changed to the current time.
+导入使用确定性的 `_id` 和 `$setOnInsert` upsert。重复启动不会重复插入或覆盖已有记录；导入中断后也可以安全重试。原始 `date`、`fetchedAt` 恢复为 BSON 日期，不改为当前时间。
 
-To repeat an import in an existing running deployment:
+已有运行中的部署可重新补齐历史数据：
 
 ```sh
 docker compose -f compose.pull.yaml exec -T -e BORDER_SEED_HISTORY=missing nodered node /opt/border/seed-history.js
 ```
 
-Use the same Compose options as the installation. To inspect the included snapshot without MongoDB, decompress `dataset/history.json.gz` with any gzip/JSON tool. The ZIP includes the dataset separately so grading is not dependent on a private server or a registry being online.
+请使用与原安装一致的 Compose 参数。不使用 MongoDB 也可通过 gzip / JSON 工具解压查看 `dataset/history.json.gz`。提交 ZIP 单独携带数据，因此评分不依赖私有服务器或镜像仓库始终在线。
 
-## Expected historical results
+## 预期的历史分析结果
 
-On Passenger & Rainfall, select Lo Wu and 365 data days. For this snapshot, the rainfall analysis has 365 valid pairs spanning 2025-10-01 to 2026-09-30 with Pearson r approximately -0.068278. Lok Ma Chau Spur Line has r approximately -0.097816. These values describe association, not causation. Online source updates can legitimately change the displayed analysis later; preserve the snapshot, export date and report screenshots for fixed-result comparison.
+在 **Passenger & Rainfall** 中选择 Lo Wu 和 365 个数据日。仅使用本快照时，雨量分析有 365 组有效配对，范围为 2025-10-01 至 2026-09-30，Pearson r 约为 **-0.068278**；Lok Ma Chau Spur Line 约为 **-0.097816**。这些只是关联，不代表因果。联网更新后分析结果可能合理变化，因此应保留快照、导出日期和报告截图，以便比较固定结果。
 
-The Monday–Sunday bar chart intentionally follows the previous complete week relative to current Hong Kong time. After the snapshot's last date, its records may not cover that week. It must show gaps until new official data arrive, never substitute the snapshot week and label it current. Other historical visualizations use available data dates and remain reproducible offline.
+星期一至星期日柱状图刻意跟随当前香港时间，显示上一个完整自然周。随着时间推移，快照可能不再覆盖该周；此时应显示缺口，直到获取新的官方记录，不能将旧周冒充为当前周。其他按可用数据日期绘制的历史图表仍可离线复现。
 
-## Live retention and limitations
+## 实时数据保留与局限
 
-MTR raw snapshots expire 14 days after `sampledAt`; clearance snapshots expire 14 days after `sampledAt`; current weather expires 14 days after `observedAt`. MongoDB's TTL monitor removes eligible records asynchronously, not precisely on the expiry second. These indexes bound ongoing live storage. Daily passenger and rainfall archives are retained for historical analysis and are not subject to these TTL indexes.
+港铁原始快照在 `sampledAt` 后 14 天到期，通关快照在 `sampledAt` 后 14 天到期，当前天气在 `observedAt` 后 14 天到期。MongoDB TTL 监控异步删除到期记录，不保证精确到秒。这些索引限制实时数据持续增长；每日客流和雨量历史保留用于分析，不受这些 TTL 索引影响。
 
-Live observations are not seeded. Offline starts correctly show unavailable live cards and collection errors, while the historical data remain usable. Reconnect to official APIs to collect fresh rail/clearance/weather information. Regional weather proxies and source publication lag remain limitations.
+不会预填实时观测。离线启动时，实时卡片不可用并出现采集错误是正常的，历史数据仍可使用。恢复官方 API 连通性后才会采集新列车／通关／天气记录。区域天气代理指标及官方发布延迟仍然是局限。
 
-## Refreshing the submission dataset
+## 更新提交的数据集
 
-From the editable project source, against a running Node-RED container on the project MongoDB network:
+在可编辑项目目录中，指定一个运行中且能访问项目 MongoDB 网络的 Node-RED 容器：
 
 ```sh
 python3 export_dataset.py --container YOUR_NODE_RED_CONTAINER
 ```
 
-The exporter takes the latest 365 rainfall dates and enough passenger records to cover those dates and the latest 365 distinct passenger dates. It validates passenger totals, whitelists fields and writes the archive/manifest. Rebuild and retest the image and update this document's dates/counts before publishing a different snapshot. A later live download is not a replacement for submitting the snapshot used in the report.
+将 `YOUR_NODE_RED_CONTAINER` 替换为实际容器名。导出程序保留最近 365 个雨量日期，以及覆盖这些日期和最近 365 个不同客流日期所需的客流记录；校验旅客合计，只保留允许字段，然后生成压缩包和清单。发布新快照前，应重新构建、测试镜像，并更新本说明的日期和数量。后续在线下载不能替代提交报告实际使用的数据快照。

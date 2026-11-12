@@ -1,55 +1,66 @@
-# Compact edition validation — 12 November 2026
+# 精简版验证记录 — 2026 年 11 月 12 日
 
-## Scope
+本文件记录已执行的检查及其环境，不代表已在所有电脑或云主机上验证。
 
-- Export: **70 nodes total** (previous compact version: 63), including one editor tab, one MongoDB config, three Dashboard tabs, five UI groups, five editor groups, four native charts, eight templates and four dropdowns. Exactly seven nodes were added for the third page; existing visualizations were retained.
-- The 63-node package is archived locally as `backups/border-63-nodes-before-trends-20261112.zip`; the older 169-node archive also remains. Neither archive nor database backups are shipped in the deliverable/image.
-- The prior two-border/weekday-mean 70-node package is archived as `backups/border-70-before-full-week-20261112.zip`. Multi-select and last-complete-week changes add no nodes.
-- Main environment: Docker Desktop ARM64; Node-RED 5.0.9, MongoDB 7.0.45, Dashboard 3.6.6, mongodb3 nodes 2.0.1. The teacher's 25 Temperature example nodes remain unchanged and are not included in the 70-node project count. No collection was dropped.
+## 验证范围
 
-## Automated and data checks
+- 导出 Flow 共 **70 个节点**（前一精简版为 63 个），包含一个编辑器标签页、一个 MongoDB 配置、三个 Dashboard 页面、五个界面分组、五个编辑器分组、四个原生图表、八个模板和四个下拉控件。第三页新增七个节点，原有可视化保留。
+- 63 节点版在本地保存为 `backups/border-63-nodes-before-trends-20261112.zip`，更早的 169 节点版也有备份。这些文件及数据库私有备份均不随仓库／镜像发布。
+- 第三页改为多选及完整周之前的 70 节点版保存在 `backups/border-70-before-full-week-20261112.zip`。多选与完整周修订没有新增节点。
+- 主环境为 Docker Desktop ARM64；Node-RED 5.0.9、MongoDB 7.0.45、Dashboard 3.6.6、mongodb3 节点 2.0.1。老师的 25 个 Temperature 示例节点保持不变，不计入项目的 70 个节点。没有删除任何集合。
 
-- All generated Function bodies compile. IDs, wire targets, same-tab connections, editor group membership and the 30–70-node limit were checked.
-- The official daily CSV parsed into 17,098 valid departure documents across eight land borders on this date. Existing date/port/direction IDs are retained. Published totals are validated against the three traveller categories.
-- Both borders and all 30/90/365 Passenger & Rainfall settings were executed against actual MongoDB (six combinations). Daily records, rainfall pairs, and the first two formatted outputs match the pre-change query/formatters exactly against the same database.
-- Lo Wu rainfall Pearson r remains -0.06827803088214673 for 365 pairs; Lok Ma Chau Spur Line remains -0.09781566388552104. Rainfall pairs end 2026-09-30; latest daily passenger date is 2026-11-11. These are intentionally separate displayed ranges.
-- One-border, three-border and all-eight selections, each at 30/90/365 trend dates, were queried against real MongoDB. All daily comparison chart outputs match the prior version for the same selections. Each weekly series matches a separate direct query for 2026-11-02 to 2026-11-08 and is independent of the history filter. Lo Wu's Mon–Sun values are 73,189 / 73,760 / 73,427 / 75,465 / 93,501 / 117,740 / 78,832 HK-resident departures.
-- Hong Kong date-boundary checks cover Thursday 12 November, Sunday 15 November 23:59:59 (both show 2–8 November), Monday 16 November 00:00 (shows 9–15 November), New Year's Day and a week crossing calendar years. Query-computed dates are carried to the formatter; missing records never shift the requested week.
-- Real clearance ingestion produced four fresh snapshots: each direction for each railway border. MongoDB lookup groups by both port and direction. The live cards show independently checked arrival/departure labels; both happened to be Normal during the real-data check.
-- Current in-memory edge checks cover independent browser state, one/three/eight selected borders, invalid/duplicate options, empty-selection defaults, superseded responses, empty weekly data, published zero, absent daily records, and Monday-first order. Prior live-data checks covered disconnect cleanup, missing direction data and non-service status. Fixtures were not inserted into the main database.
-- Existing MTR/weather validation and rainfall minimum-pair/variance rules remain in place; API errors now reach Docker logs as well as the Debug sidebar.
+## 自动化与数据检查
 
-## Browser and deployment
+- 所有生成的 Function 函数体均可编译，已检查 ID、连线目标、同页连接、编辑器分组成员及 30—70 个节点限制。
+- 当日官方 CSV 可解析出八个陆路口岸共 17,098 条有效出境记录，保留既有日期／口岸／方向 ID，并校验总人数等于三个旅客类别之和。
+- 在真实 MongoDB 上执行了两个口岸与 30 / 90 / 365 三个范围的六组 **Passenger & Rainfall** 查询。同一数据库下，每日记录、雨量配对及前两个格式化输出与修改前查询／格式化程序完全一致。
+- 365 组配对下，罗湖 Pearson r 为 -0.06827803088214673，落马洲支线为 -0.09781566388552104。雨量配对结束于 2026-09-30，最新客流日期为 2026-11-11；两个日期范围刻意分别展示。
+- 在真实 MongoDB 上检查单口岸、三个口岸、全部八口岸，以及各自 30 / 90 / 365 个趋势日期。每日比较图与旧版同选择输出一致；每条周序列均与 2026-11-02 至 2026-11-08 的直接查询一致，且不受历史范围筛选影响。罗湖星期一至星期日香港居民出境人次为 73,189 / 73,760 / 73,427 / 75,465 / 93,501 / 117,740 / 78,832。
+- 香港时间边界检查覆盖 2026 年 11 月 12 日星期四、11 月 15 日星期日 23:59:59（均显示 11 月 2—8 日）、11 月 16 日星期一 00:00（显示 11 月 9—15 日）、元旦及跨年周。查询计算的日期传递给格式化程序，缺失记录不会改变请求周。
+- 真实通关采集生成四条新快照：两个铁路口岸各含入境和出境。MongoDB 按口岸和方向同时分组查询，卡片分别检查并展示两个方向；本次真实检查中两者恰好均为 `Normal`。
+- 内存边界检查覆盖浏览器独立状态、单／三／八口岸选择、无效／重复选项、清空后默认值、旧响应被替代、空周数据、官方零值、缺失日期及星期一优先排序。此前实时检查还覆盖断连清理、方向缺失及非服务状态。测试数据没有插入主数据库。
+- 原有港铁／天气校验、雨量最小配对数和方差规则保持不变；API 错误会同时写入 Docker 日志和 Debug 侧栏。
 
-- Current browser inspection confirms three selected borders render matching line/bar series. Selecting all eight retains all eight legends and distinct colors; switching from 30 to 90 dates changes the trend range to 2026-08-14–2026-11-11 while the weekly range remains 2026-11-02–2026-11-08. Missing Lok Ma Chau weekly records show 0/7 coverage, not zero-valued observations; published Sha Tau Kok zeros show 7/7 coverage. The compact summary scrolls for larger selections.
-- Native chart routing was corrected, not just template/filter state: two browser sessions were directly inspected with different border pairs. One retained Lok Ma Chau Spur Line/Shenzhen Bay while the other showed Lo Wu/Lok Ma Chau Spur Line, with matching chart legends and summaries. Guarded delayed connect/tab queries restore each browser's state after Classic Dashboard cache replay. This also protects the existing passenger history chart.
-- A separate temporary standalone stack booted from the new image with empty volumes and ingested 17,098 real passenger records, 2,099 rainfall records, four clearance snapshots and current weather. Main volumes were not used for this test.
-- The temporary stack was then given the old 63-node flow plus two unrelated test nodes and a disabled admin editor. `upgrade.sh` installed the 70-node revision, preserved the unrelated nodes and MongoDB volume, and backed up the old flow. This checks the file-based cloud upgrade route without requiring a public editor.
-- Node's IPv4-first/no-family-autoselection environment settings are retained. The user previously reported that these resolved Immigration downloads on their Huawei Cloud host. This new 70-node revision has not been deployed to that cloud host by the agent.
+## 浏览器与部署检查
 
-## Previous 1.1.0 local image preparation
+- 浏览器检查确认三个选中口岸的折线与柱状系列一致；全选八个时保留八组图例及不同颜色。由 30 改为 90 个日期时，折线范围变为 2026-08-14 至 2026-11-11，周范围仍是 2026-11-02 至 2026-11-08。落马洲缺失的周记录显示 0/7 覆盖，而不是零客流；沙头角官方零值显示 7/7 覆盖。多选较多时摘要可滚动。
+- 修正的是原生图表消息路由，不仅是模板／筛选状态。两个浏览器会话分别选择落马洲支线／深圳湾、罗湖／落马洲支线，经检查其图例与摘要均独立。带保护的延迟连接／切页查询在经典 Dashboard 缓存回放后恢复各自状态，也保护已有客流历史图。
+- 独立临时部署从空数据卷启动，采集到 17,098 条真实客流、2,099 条雨量、四条通关快照及当前天气，未使用主数据卷。
+- 随后将旧 63 节点 Flow、两个无关测试节点放入临时部署并禁用管理编辑器。`upgrade.sh` 安装 70 节点版，保留无关节点及 MongoDB 数据卷并备份旧 Flow，验证了无需公开编辑器的文件升级方式。
+- 保留 Node 的 IPv4 优先／关闭地址族自动选择设置。用户此前报告该设置解决了华为云入境处下载问题，但这里的本地检查不等于代为完成云端部署。
 
-- Built the latest full-week/multi-select flow into the local multi-platform image `comp7503-border:1.1.0` for `linux/arm64` and `linux/amd64`. This is a local image name, not a published Hub repository. The flow SHA-256 in both seeded data volumes is `69dd108ff4c107755e061df19c90be7746a848beeb5512af2e5284b82395d1cd`, matching the current export.
-- Each application architecture booted separately with a fresh Node-RED volume and a fresh MongoDB database using `compose.pull.yaml`. AMD64 application execution used Docker Desktop emulation on the ARM64 Mac; MongoDB ran natively. This is not a native AMD64 host test.
-- Both fresh installations returned HTTP 200 for `/ui/`, installed 70 project nodes with the latest labels, and ingested 17,098 passenger records, 2,099 historical rainfall records, four resident clearance snapshots, two train snapshots and two current weather records. No Node-RED error-level messages occurred during these smoke checks. No collected records were copied from the main database.
-- Only the isolated smoke containers, networks and their newly created volumes were removed afterward. The three main assignment containers and their data volumes were not changed.
-- Added the build-free pull Compose file, startup script and `DEPLOY_FROM_HUB.md`. Publishing and a registry pull test still require the owner's Docker Hub namespace, repository visibility and authentication; neither is claimed complete.
+## 先前 1.1.0 本地镜像准备
 
-## Published 1.2.0 release with history
+以下为早于 1.2.0 公开发布的历史阶段记录，不代表当前发布状态：
 
-- Public image `aazyx774/comp7503-border:1.2.0` was pushed to Docker Hub on 12 November 2026. Image index digest: `sha256:e414e41929f05839ac913f77e796ebf50d44d5cac4e4b4bedc388cad3c5ae4f8`. Hub's repository API reports `is_private: false`; the tag lists both `linux/amd64` and `linux/arm64`.
-- Both platforms were pulled using a temporary empty Docker client configuration, with no Docker Hub user credentials supplied. Existing local layers were reused; these were anonymous registry-access checks, not tests from a second physical machine.
-- The reviewed public snapshot has 3,226 passenger records for 2025-10-01–2026-11-11 and 365 rainfall records for 2025-10-01–2026-09-30. Archive checksum, unique IDs, official-source whitelist, passenger totals and absence of credential fields were checked. `dataset/manifest.json` records the original export time, ranges and both compressed/uncompressed hashes.
-- Fresh application instances for both architectures were run with empty volumes on an internal-only Docker network, preventing external API access. Each restored exactly 3,226 passenger and 365 weather records before starting the UI, with no live observations seeded. Seeded `date`/`fetchedAt` values were verified as BSON dates. The deployed flow hash on both was `5cd2bc378cd3e288fd8612ffb2cb928990956ab000703a384e0fc25535561bde`; all 70 nodes compile and have valid IDs/wires/groups.
-- With only the bundled data, Lo Wu and Lok Ma Chau Spur Line each reproduce 365 same-date rainfall/passenger pairs and the previously documented Pearson coefficients exactly. Eight-border series, Monday-first weekly labels and the current full-week dates were checked. Original history outputs remain unchanged against the pre-change baseline on the main database.
-- Reimport inserted zero additional records and left an existing validation marker unchanged; disabling imports was also checked. A deliberately corrupted manifest was rejected before database writes. These fixtures and file modifications existed only in isolated test containers.
-- All three live collections have 14-day TTL indexes. Isolated old/fresh timestamp fixtures confirmed automatic removal of expired records and retention of fresh records for MTR, clearance and current weather. Fixtures were removed after testing. Historical daily collections do not receive TTL indexes.
-- Browser inspection through a temporary local reverse proxy confirmed that the isolated offline application renders the passenger line, 365-pair correlation, scatter plot, comparison line and full-week bars from the restored snapshot. Collection failures no longer broadcast an empty error payload over historical summaries; live/query errors remain visible in their appropriate views and logs.
-- The actual minimal `border-control-pull-install.zip` was extracted into a new temporary directory without the editable project sources. Its unmodified `sh start-pull.sh` pulled the public application and MongoDB images and started a fresh, healthy installation on an alternate local port without a build. This checks the exact friend/TA installation files, not only a development Compose setup.
-- Main assignment containers, their existing flow and the teacher's example were not redeployed during publishing. The public image does not automatically update the user's separate Huawei Cloud host. Runtime tests used Docker Desktop ARM64, including AMD64 application emulation, not a native AMD64 cloud machine.
+- 曾将多选／完整周 Flow 构建为本地双架构镜像 `comp7503-border:1.1.0`，支持 `linux/arm64` 和 `linux/amd64`。当时只是本地镜像名，不是已发布 Hub 仓库。两套初始数据卷的 Flow SHA-256 均为 `69dd108ff4c107755e061df19c90be7746a848beeb5512af2e5284b82395d1cd`，与当时导出一致，不是现行 1.2.0 的哈希。
+- 两种应用架构分别以全新 Node-RED 数据卷及 MongoDB 数据库通过 `compose.pull.yaml` 启动。AMD64 应用在 ARM64 Mac 上由 Docker Desktop 模拟执行，MongoDB 原生运行，不是原生 AMD64 主机测试。
+- 两次全新安装的 `/ui/` 均返回 HTTP 200，安装 70 个项目节点，并采集到 17,098 条客流、2,099 条历史雨量、四条居民通关快照、两条列车快照及两条当前天气。冒烟测试没有 Node-RED error 级别消息，数据未从主数据库复制。
+- 测试后只删除临时容器、网络及新建数据卷，三个课程主容器和其数据卷未变。
+- 该阶段增加免构建拉取配置、启动脚本及 `DEPLOY_FROM_HUB.md`；当时尚未完成公开发布和仓库拉取检查，后续结果见下节。
 
-## Deliberate limits
+## 已发布的 1.2.0 历史数据版
 
-The new trend charts remain **outbound HK residents**, not all travellers or bidirectional passenger analysis. Only the live clearance cards show both directions. There is no new prediction model, causal/statistical-significance claim, hourly passenger feed, queue correlation, ranking, pie chart, heatmap, long-term MTR rollup or custom HTTP API.
+- 公开镜像 `aazyx774/comp7503-border:1.2.0` 于 2026 年 11 月 12 日推送到 Docker Hub。镜像索引摘要为 `sha256:e414e41929f05839ac913f77e796ebf50d44d5cac4e4b4bedc388cad3c5ae4f8`。Hub 仓库 API 返回 `is_private: false`，标签同时包含 `linux/amd64`、`linux/arm64`。
+- 使用临时空 Docker 客户端配置，在不提供 Hub 用户凭据的情况下拉取了两种架构。复用了本地已有镜像层；这是匿名仓库访问检查，不是另一台实体机器测试。
+- 经审查的公开快照包含 2025-10-01 至 2026-11-11 的 3,226 条客流，以及 2025-10-01 至 2026-09-30 的 365 条雨量。已检查压缩包校验值、唯一 ID、官方来源白名单、旅客合计及无凭据字段。`dataset/manifest.json` 记录原始导出时间、日期范围和压缩／未压缩内容哈希。
+- 两种应用架构分别在隔离的内部 Docker 网络和空数据卷上运行，阻断外部 API。各自在网页启动前准确恢复 3,226 条客流和 365 条雨量，不预填实时观测。`date` / `fetchedAt` 经检查为 BSON 日期。两者部署的 Flow 哈希均为 `5cd2bc378cd3e288fd8612ffb2cb928990956ab000703a384e0fc25535561bde`，70 个节点均可编译，ID／连线／分组有效。
+- 仅使用内置数据时，罗湖与落马洲支线均复现 365 组同日雨量／客流配对及上述精确相关系数。已检查八口岸序列、星期一优先周标签及当前完整周日期。主数据库上原有历史输出与修改前基线保持一致。
+- 再次导入新增零条记录，且已有验证标记未被覆盖；也检查了禁用导入选项。故意损坏清单后，在写库前即被拒绝。这些测试记录和文件改动仅存在于隔离测试容器。
+- 三个实时集合均有 14 天 TTL 索引。使用隔离的新旧时间戳测试记录，确认港铁、通关及当前天气自动删除到期数据并保留新数据；测试后清理了记录。每日历史集合没有 TTL 索引。
+- 通过临时本地反向代理进行浏览器检查，确认离线应用可用恢复快照展示客流折线、365 组相关性、散点、比较折线及完整周柱状图。采集失败不再向历史摘要广播空错误数据；实时／查询错误仍在对应视图和日志可见。
+- 将实际最简安装包 `border-control-pull-install.zip` 解压到全新临时目录，不含可编辑源码。未修改的 `sh start-pull.sh` 成功拉取公开应用与 MongoDB 镜像，在备用端口启动健康的新安装，无需构建。验证的是朋友／助教实际拿到的安装文件，不仅是开发配置。
+- 发布过程中未重新部署课程主容器、已有 Flow 或老师示例。公开镜像不会自动更新用户独立的华为云主机。运行测试使用 Docker Desktop ARM64，包含 AMD64 应用模拟，不是原生 AMD64 云机器。
 
-The 1.2.0 public release includes a bounded historical dataset and reproducible restoration. No native AMD64 host test or complete group report is claimed. Classic Dashboard is retained for course compatibility; keep its editor private. A running UI/health check alone does not prove successful data acquisition.
+## GitHub 公开仓库复现检查
+
+- 已创建公开仓库 `kkzyx/comp7503-border`，默认分支为 `main`；未上传私有备份、凭据或缓存。
+- 禁用 Git 凭据助手及全局配置后，通过 HTTPS 匿名克隆到全新临时目录，使用原样的 `sh start-pull.sh`，配合独立 Compose 项目名和本地 1898 端口启动。
+- 临时安装的 MongoDB、Node-RED 均达到健康状态；数据库确认 3,226 条客流和 365 条 SSH 历史雨量，`/ui/` 返回 HTTP 200。
+- 测试结束后只清理该临时项目的容器、网络与数据卷，没有改动现有本地或云端部署。这证明该环境下匿名克隆与启动成功，不保证所有网络均可访问官方 API 或镜像仓库。
+
+## 明确的功能边界
+
+趋势图仍仅分析**香港居民出境客流**，不是全部旅客或双向客流；只有实时通关卡片展示两个方向。没有新增预测模型、因果／统计显著性声明、小时客流接口、排队相关性、排名、饼图、热力图、长期港铁汇总或自定义 HTTP API。
+
+1.2.0 公开版包含适量历史数据及可复现恢复机制，但没有声称已完成原生 AMD64 主机验证或完整小组报告。经典 Dashboard 用于课程兼容，编辑器应保持私有。网页或健康检查正常本身不能证明成功采集数据。
