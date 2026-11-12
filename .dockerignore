@@ -1,0 +1,9 @@
+backups
+src
+*.md
+*.py
+__pycache__
+.DS_Store
+.git
+.env
+.env.*

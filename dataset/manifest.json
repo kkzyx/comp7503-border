@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "exportedAt": "2026-11-12T14:41:04.945Z",
+  "purpose": "Reproduce historical border-traffic and rainfall analysis without requiring a live API download.",
+  "scope": "Official public daily records only; no live snapshots, credentials or unrelated collections.",
+  "ports": {
+    "LWS": "Lo Wu",
+    "LSC": "Lok Ma Chau Spur Line",
+    "LMC": "Lok Ma Chau",
+    "SBC": "Shenzhen Bay",
+    "HYW": "Heung Yuen Wai",
+    "HZM": "Hong Kong-Zhuhai-Macao Bridge",
+    "MKT": "Man Kam To",
+    "STK": "Sha Tau Kok"
+  },
+  "sources": {
+    "passengers": "https://www.immd.gov.hk/opendata/eng/transport/immigration_clearance/statistics_on_daily_passenger_traffic.csv",
+    "weather": "https://data.weather.gov.hk/weatherAPI/cis/csvfile/SSH/ALL/daily_SSH_RF_ALL.csv"
+  },
+  "collections": {
+    "passengers": {
+      "count": 3226,
+      "start": "2025-10-01",
+      "end": "2026-11-11"
+    },
+    "weather": {
+      "count": 365,
+      "start": "2025-10-01",
+      "end": "2026-09-30"
+    }
+  },
+  "archiveFile": "history.json.gz",
+  "archiveSha256": "d8fc7eedf774ba30c0ef5577850c539b9901aad13805285849757991ad2b471a",
+  "uncompressedSha256": "a85804e84b54e8e2d404b05799b6bbcf3c32b3d3fcc7c96633ca5d3eae24495e",
+  "compressedBytes": 82409,
+  "uncompressedBytes": 1351166
+}

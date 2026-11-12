@@ -1,0 +1,7 @@
+<div class="simple-panel">
+ <div class="simple-error" ng-if="msg.payload.error">{{msg.payload.error}}</div>
+ <div class="simple-title">From Sheung Shui to the border</div>
+ <div class="simple-muted">HK resident clearance · {{msg.payload.now | date:'HH:mm:ss':'+0800'}} HKT</div>
+ <div class="simple-grid"><div class="simple-card" ng-repeat="card in msg.payload.cards"><strong>{{card.name}}</strong><div class="simple-clearance"><div><span>Arriving in HK</span><span class="simple-tag simple-tag-{{card.arrival.tone}}">{{card.arrival.label}}</span></div><div class="simple-muted">{{card.arrival.sourceAt ? (card.arrival.sourceAt | date:'HH:mm':'+0800') + ' HKT' : 'No observation'}}</div><div><span>Departing HK</span><span class="simple-tag simple-tag-{{card.departure.tone}}">{{card.departure.label}}</span></div><div class="simple-muted">{{card.departure.sourceAt ? (card.departure.sourceAt | date:'HH:mm':'+0800') + ' HKT' : 'No observation'}}</div></div><div class="simple-muted">Next train toward border</div><div class="simple-value">{{card.waitMin == null ? '—' : card.waitMin}}<small style="font-size:13px" ng-if="card.waitMin != null"> min</small></div><div class="simple-muted">{{card.railNote}}</div></div></div>
+ <div class="simple-muted">Predictions are not occupancy. Clearance grades are not exact waiting times.</div>
+</div>

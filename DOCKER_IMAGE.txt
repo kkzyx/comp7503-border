@@ -1,0 +1,17 @@
+Docker Hub account: aazyx774
+Public repository: aazyx774/comp7503-border
+Versioned application image: aazyx774/comp7503-border:1.2.0
+Immutable image index: aazyx774/comp7503-border@sha256:e414e41929f05839ac913f77e796ebf50d44d5cac4e4b4bedc388cad3c5ae4f8
+Platforms: linux/amd64, linux/arm64
+Published and anonymous pulls verified: 12 November 2026
+
+Use compose.pull.yaml and start-pull.sh to run the application together with MongoDB.
+The image restores its included public history dataset before Node-RED starts.
+See DEPLOY_FROM_HUB.md and HISTORICAL_DATA.md for setup and grading reproduction.
+
+Bundled passenger records: 3226, 2025-10-01 through 2026-11-11.
+Bundled daily rainfall records: 365, 2025-10-01 through 2026-09-30.
+Dataset archive SHA-256: d8fc7eedf774ba30c0ef5577850c539b9901aad13805285849757991ad2b471a
+
+No credentials, unrelated collections or live snapshot backups are included.
+The complete project report is still required separately for final submission.

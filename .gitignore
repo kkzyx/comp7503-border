@@ -1,0 +1,7 @@
+backups/
+__pycache__/
+.DS_Store
+.env
+.env.*
+flows_cred.json
+node_modules/

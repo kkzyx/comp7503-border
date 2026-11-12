@@ -1,0 +1,1642 @@
+[
+  {
+    "id": "3629cc25085416b8",
+    "type": "tab",
+    "label": "Cross-border Connections",
+    "disabled": false,
+    "info": "Compact course project. API → validate → MongoDB; MongoDB → analyse → Dashboard. Resident clearance in both directions; outbound HK-resident passenger analysis."
+  },
+  {
+    "id": "098faa970407a996",
+    "type": "mongodb3",
+    "uri": "mongodb://mongodb:27017/border_insights",
+    "name": "Border MongoDB",
+    "options": "{\"useNewUrlParser\": true, \"useUnifiedTopology\": true, \"serverSelectionTimeoutMS\": 10000}",
+    "parallelism": "-1"
+  },
+  {
+    "id": "4399f90b9dcca04f",
+    "type": "inject",
+    "z": "3629cc25085416b8",
+    "name": "MTR · 10 s",
+    "x": 210,
+    "y": 125,
+    "wires": [
+      [
+        "d22fffffc38ba318"
+      ]
+    ],
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "10",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "2",
+    "topic": "mtr-SHS",
+    "payload": "",
+    "payloadType": "date",
+    "g": "47a1e546bcafe6ee"
+  },
+  {
+    "id": "d22fffffc38ba318",
+    "type": "http request",
+    "z": "3629cc25085416b8",
+    "name": "MTR · Sheung Shui",
+    "x": 510,
+    "y": 125,
+    "wires": [
+      [
+        "659b1602ed303817"
+      ]
+    ],
+    "method": "GET",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "https://rt.data.gov.hk/v1/transport/mtr/getSchedule.php?line=EAL&sta=SHS",
+    "persist": false,
+    "requestTimeout": "8000",
+    "g": "47a1e546bcafe6ee"
+  },
+  {
+    "id": "659b1602ed303817",
+    "type": "function",
+    "z": "3629cc25085416b8",
+    "name": "Keep Lo Wu / Lok Ma Chau predictions",
+    "x": 810,
+    "y": 125,
+    "wires": [
+      [
+        "f6dad7c5d7305ea0"
+      ]
+    ],
+    "func": "if (msg.statusCode !== 200) throw new Error(`MTR HTTP ${msg.statusCode}`);\nconst body = msg.payload;\nconst block = body?.data?.['EAL-SHS'];\nconst sourceAt = new Date(String(block?.curr_time || body?.curr_time || '').replace(' ', 'T') + '+08:00');\nconst observedAt = new Date();\nconst sourceTime = Number.isFinite(sourceAt.getTime()) ? sourceAt : null;\nconst age = sourceTime ? observedAt - sourceTime : NaN;\nconst sourceFresh = Number(body?.status) === 1 && Boolean(block) && age >= -30000 && age <= 120000;\nconst routes = [['LOW', 'LWS'], ['LMC', 'LSC']].map(([destination, port]) => {\n    const trains = (Array.isArray(block?.UP) ? block.UP : []).filter(train => train.dest === destination && train.valid === 'Y').map(train => ({\n        destination, platform: String(train.plat || ''),\n        predictedAt: new Date(String(train.time).replace(' ', 'T') + '+08:00'),\n        waitMin: /^\\d+$/.test(String(train.ttnt)) ? Number(train.ttnt) : null\n    })).filter(train => Number.isFinite(train.predictedAt.getTime()) && train.waitMin !== null && train.waitMin <= 180).sort((first, second) => first.predictedAt - second.predictedAt);\n    return {station: 'SHS', direction: 'UP', destination, port, trains, waitMin: trains[0]?.waitMin ?? null};\n});\nconst sampledAt = new Date(Math.floor(observedAt.getTime() / 10000) * 10000);\nconst document = {_id: `SHS_${sampledAt.toISOString()}`, station: 'SHS', line: 'EAL', sampledAt, observedAt, sourceAt: sourceTime, sourceFresh, available: Number(body?.status) === 1 && Boolean(block), delayReported: body?.isdelay === 'Y', routes, source: msg.responseUrl || msg.url};\nmsg.sourceName = 'mtr-SHS';\nmsg.payload = [[{replaceOne: {filter: {_id: document._id}, replacement: document, upsert: true}}], {ordered: false}];\nreturn msg;\n",
+    "outputs": 1,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "timeout": 30,
+    "g": "47a1e546bcafe6ee"
+  },
+  {
+    "id": "f6dad7c5d7305ea0",
+    "type": "mongodb3 in",
+    "z": "3629cc25085416b8",
+    "name": "Write Mtr",
+    "x": 1110,
+    "y": 125,
+    "wires": [
+      [
+        "c1d5315b481e71e1"
+      ]
+    ],
+    "service": "_ext_",
+    "configNode": "098faa970407a996",
+    "collection": "mtr_snapshots",
+    "operation": "bulkWrite",
+    "g": "47a1e546bcafe6ee"
+  },
+  {
+    "id": "d7e38b19fd0a1e48",
+    "type": "inject",
+    "z": "3629cc25085416b8",
+    "name": "Clearance · 15 min",
+    "x": 210,
+    "y": 270,
+    "wires": [
+      [
+        "30f635c7806069d8"
+      ]
+    ],
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "900",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "3",
+    "topic": "resident",
+    "payload": "",
+    "payloadType": "date",
+    "g": "0badabbca5a99859"
+  },
+  {
+    "id": "30f635c7806069d8",
+    "type": "http request",
+    "z": "3629cc25085416b8",
+    "name": "Resident clearance grades",
+    "x": 510,
+    "y": 270,
+    "wires": [
+      [
+        "84df9a0251f86d54"
+      ]
+    ],
+    "method": "GET",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "https://secure1.info.gov.hk/immd/mobileapps/2bb9ae17/data/CPQueueTimeR.json",
+    "persist": false,
+    "requestTimeout": "20000",
+    "g": "0badabbca5a99859"
+  },
+  {
+    "id": "84df9a0251f86d54",
+    "type": "function",
+    "z": "3629cc25085416b8",
+    "name": "Two borders · resident arrivals + departures",
+    "x": 810,
+    "y": 270,
+    "wires": [
+      [
+        "89fbb740d4ef4b9e"
+      ]
+    ],
+    "func": "if (msg.statusCode !== 200 || !['LWS', 'LSC'].some(port => msg.payload?.[port])) throw new Error('Invalid clearance response');\nconst observedAt = new Date();\nconst sampledAt = new Date(Math.floor(observedAt.getTime() / 900000) * 900000);\nconst modified = new Date(msg.headers?.['last-modified']);\nconst sourceModifiedAt = Number.isFinite(modified.getTime()) ? modified : null;\nconst age = sourceModifiedAt ? observedAt - sourceModifiedAt : NaN;\nconst sourceFresh = age >= -300000 && age <= 2700000;\nconst labels = {0: 'Normal', 1: 'Busy', 2: 'Very busy', 4: 'Maintenance', 99: 'Non-service hours'};\nconst hk = new Date(sampledAt.getTime() + 28800000);\nconst documents = ['LWS', 'LSC'].flatMap(port => ['arrival', 'departure'].map(direction => {\n    const raw = msg.payload[port]?.[direction === 'arrival' ? 'arrQueue' : 'depQueue'];\n    const code = Number.isInteger(raw) ? raw : null;\n    return {_id: `${sampledAt.toISOString()}_resident_${port}_${direction}`, port, group: 'resident', direction, code, label: labels[code] || 'Unavailable', observedAt, sampledAt, sourceModifiedAt, sourceFresh, valid: sourceFresh && [0, 1, 2].includes(code), busy: [1, 2].includes(code), hkDay: hk.toISOString().slice(0, 10), hkHour: hk.getUTCHours(), source: msg.responseUrl || msg.url};\n}));\nmsg.sourceName = 'resident';\nmsg.payload = [documents.map(document => ({replaceOne: {filter: {_id: document._id}, replacement: document, upsert: true}})), {ordered: false}];\nreturn msg;\n",
+    "outputs": 1,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "timeout": 30,
+    "g": "0badabbca5a99859"
+  },
+  {
+    "id": "89fbb740d4ef4b9e",
+    "type": "mongodb3 in",
+    "z": "3629cc25085416b8",
+    "name": "Write Queue",
+    "x": 1110,
+    "y": 270,
+    "wires": [
+      [
+        "c1d5315b481e71e1"
+      ]
+    ],
+    "service": "_ext_",
+    "configNode": "098faa970407a996",
+    "collection": "snapshots",
+    "operation": "bulkWrite",
+    "g": "0badabbca5a99859"
+  },
+  {
+    "id": "4a065643e64e3e14",
+    "type": "inject",
+    "z": "3629cc25085416b8",
+    "name": "Current weather · 15 min",
+    "x": 1410,
+    "y": 270,
+    "wires": [
+      [
+        "0c1754bb130880ae"
+      ]
+    ],
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "900",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "4",
+    "topic": "current-weather",
+    "payload": "",
+    "payloadType": "date",
+    "g": "0badabbca5a99859"
+  },
+  {
+    "id": "0c1754bb130880ae",
+    "type": "http request",
+    "z": "3629cc25085416b8",
+    "name": "HKO current weather",
+    "x": 210,
+    "y": 355,
+    "wires": [
+      [
+        "1b408b82f95443c3"
+      ]
+    ],
+    "method": "GET",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=rhrread&lang=en",
+    "persist": false,
+    "requestTimeout": "20000",
+    "g": "0badabbca5a99859"
+  },
+  {
+    "id": "1b408b82f95443c3",
+    "type": "function",
+    "z": "3629cc25085416b8",
+    "name": "Regional temperature + past-hour rain",
+    "x": 510,
+    "y": 355,
+    "wires": [
+      [
+        "2803f9f32f619b67"
+      ]
+    ],
+    "func": "if (msg.statusCode !== 200 || !Array.isArray(msg.payload?.temperature?.data)) throw new Error('Invalid current weather response');\nconst body = msg.payload;\nconst observedAt = new Date();\nconst temperature = body.temperature.data.find(row => row.place === 'Ta Kwu Ling');\nconst rainfall = body.rainfall?.data?.find(row => row.place === 'North District');\nconst records = [\n    {metric: 'temperature', station: 'Ta Kwu Ling', raw: temperature?.value, unit: '°C', timestamp: body.temperature.recordTime},\n    {metric: 'rainfall', station: 'North District', raw: rainfall?.max, unit: 'mm', timestamp: body.rainfall?.endTime, windowStart: body.rainfall?.startTime, windowEnd: body.rainfall?.endTime}\n].map(record => {\n    const sourceAt = new Date(record.timestamp);\n    const numeric = /^-?\\d+(\\.\\d+)?$/.test(String(record.raw)) ? Number(record.raw) : null;\n    const valid = numeric !== null && (record.metric === 'rainfall' ? numeric >= 0 : numeric >= -30 && numeric <= 60);\n    const sourceTime = Number.isFinite(sourceAt.getTime()) ? sourceAt : null;\n    return {_id: `${record.metric}_${record.station}_${sourceTime?.toISOString() || observedAt.toISOString()}`, metric: record.metric, station: record.station, sourceAt: sourceTime, observedAt, valid: valid && Boolean(sourceTime), value: valid ? numeric : null, raw: record.raw ?? null, unit: record.unit, windowStart: record.windowStart ? new Date(record.windowStart) : null, windowEnd: record.windowEnd ? new Date(record.windowEnd) : null, source: msg.responseUrl || msg.url};\n});\nmsg.sourceName = 'current-weather';\nmsg.payload = [records.map(document => ({replaceOne: {filter: {_id: document._id}, replacement: document, upsert: true}})), {ordered: false}];\nreturn msg;\n",
+    "outputs": 1,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "timeout": 30,
+    "g": "0badabbca5a99859"
+  },
+  {
+    "id": "2803f9f32f619b67",
+    "type": "mongodb3 in",
+    "z": "3629cc25085416b8",
+    "name": "Write Current Weather",
+    "x": 810,
+    "y": 355,
+    "wires": [
+      [
+        "c1d5315b481e71e1"
+      ]
+    ],
+    "service": "_ext_",
+    "configNode": "098faa970407a996",
+    "collection": "weather_live",
+    "operation": "bulkWrite",
+    "g": "0badabbca5a99859"
+  },
+  {
+    "id": "f65950790eaf316d",
+    "type": "inject",
+    "z": "3629cc25085416b8",
+    "name": "Daily passengers · check 6 h",
+    "x": 210,
+    "y": 500,
+    "wires": [
+      [
+        "89cdcacd8b6676b1"
+      ]
+    ],
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "21600",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "5",
+    "topic": "passengers",
+    "payload": "",
+    "payloadType": "date",
+    "g": "c7b7f5b0f5c513da"
+  },
+  {
+    "id": "89cdcacd8b6676b1",
+    "type": "http request",
+    "z": "3629cc25085416b8",
+    "name": "Immigration daily CSV",
+    "x": 510,
+    "y": 500,
+    "wires": [
+      [
+        "0f59d9fe759e1d44"
+      ]
+    ],
+    "method": "GET",
+    "ret": "txt",
+    "paytoqs": "ignore",
+    "url": "https://www.immd.gov.hk/opendata/eng/transport/immigration_clearance/statistics_on_daily_passenger_traffic.csv",
+    "persist": false,
+    "requestTimeout": "60000",
+    "g": "c7b7f5b0f5c513da"
+  },
+  {
+    "id": "0f59d9fe759e1d44",
+    "type": "csv",
+    "z": "3629cc25085416b8",
+    "name": "Passenger CSV → rows",
+    "x": 810,
+    "y": 500,
+    "wires": [
+      [
+        "76dd2e5ad8a845fd"
+      ]
+    ],
+    "sep": ",",
+    "hdrin": true,
+    "hdrout": "none",
+    "multi": "mult",
+    "ret": "\n",
+    "temp": "",
+    "skip": "0",
+    "strings": true,
+    "include_empty_strings": false,
+    "include_null_values": false,
+    "g": "c7b7f5b0f5c513da"
+  },
+  {
+    "id": "76dd2e5ad8a845fd",
+    "type": "function",
+    "z": "3629cc25085416b8",
+    "name": "Eight land borders · validate + daily upsert",
+    "x": 1110,
+    "y": 500,
+    "wires": [
+      [
+        "2518841eabfaad7f"
+      ]
+    ],
+    "func": "if (msg.statusCode !== 200 || !Array.isArray(msg.payload) || !msg.payload.length) throw new Error('Invalid passenger CSV response');\nconst portNames = Object.fromEntries(Object.entries({\"LWS\": \"Lo Wu\", \"LSC\": \"Lok Ma Chau Spur Line\", \"LMC\": \"Lok Ma Chau\", \"SBC\": \"Shenzhen Bay\", \"HYW\": \"Heung Yuen Wai\", \"HZM\": \"Hong Kong-Zhuhai-Macao Bridge\", \"MKT\": \"Man Kam To\", \"STK\": \"Sha Tau Kok\"}).map(([port, name]) => [name, port]));\nconst records = [];\nfor (const row of msg.payload) {\n    const port = portNames[String(row['Control Point']).trim()];\n    if (!port || String(row['Arrival / Departure']).trim() !== 'Departure') continue;\n    const match = /^(\\d{2})-(\\d{2})-(\\d{4})$/.exec(row.Date);\n    if (!match) continue;\n    const day = `${match[3]}-${match[2]}-${match[1]}`;\n    const date = new Date(`${day}T00:00:00+08:00`);\n    const counts = ['Hong Kong Residents', 'Mainland Visitors', 'Other Visitors', 'Total'].map(key => /^\\d+$/.test(String(row[key])) ? Number(row[key]) : NaN);\n    if (!counts.every(Number.isSafeInteger) || counts[0] + counts[1] + counts[2] !== counts[3] || !Number.isFinite(date.getTime()) || new Date(date.getTime() + 28800000).toISOString().slice(0, 10) !== day) continue;\n    const [resident, mainland, other, total] = counts;\n    const weekday = new Date(`${day}T12:00:00+08:00`).getUTCDay();\n    records.push({_id: `${day}_${port}_departure`, port, day, date, direction: 'departure', resident, mainland, other, visitor: mainland + other, total, weekday, weekend: [0, 6].includes(weekday), fetchedAt: new Date(), source: msg.responseUrl || msg.url});\n}\nif (!records.length) throw new Error('No valid land-border passenger records');\nreturn [Array.from({length: Math.ceil(records.length / 1000)}, (unused, index) => ({sourceName: 'passengers', payload: [records.slice(index * 1000, (index + 1) * 1000).map(document => ({replaceOne: {filter: {_id: document._id}, replacement: document, upsert: true}})), {ordered: false}]}))];\n",
+    "outputs": 1,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "timeout": 30,
+    "g": "c7b7f5b0f5c513da"
+  },
+  {
+    "id": "2518841eabfaad7f",
+    "type": "mongodb3 in",
+    "z": "3629cc25085416b8",
+    "name": "Write Passengers",
+    "x": 1410,
+    "y": 500,
+    "wires": [
+      [
+        "c1d5315b481e71e1"
+      ]
+    ],
+    "service": "_ext_",
+    "configNode": "098faa970407a996",
+    "collection": "passengers",
+    "operation": "bulkWrite",
+    "g": "c7b7f5b0f5c513da"
+  },
+  {
+    "id": "7a882d6632f5161d",
+    "type": "inject",
+    "z": "3629cc25085416b8",
+    "name": "Daily rain archive · check 6 h",
+    "x": 210,
+    "y": 585,
+    "wires": [
+      [
+        "d099b92d4c3dd010"
+      ]
+    ],
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "21600",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "7",
+    "topic": "daily-rain",
+    "payload": "",
+    "payloadType": "date",
+    "g": "c7b7f5b0f5c513da"
+  },
+  {
+    "id": "d099b92d4c3dd010",
+    "type": "http request",
+    "z": "3629cc25085416b8",
+    "name": "HKO Sheung Shui daily rain",
+    "x": 510,
+    "y": 585,
+    "wires": [
+      [
+        "1d92db9cc78a3604"
+      ]
+    ],
+    "method": "GET",
+    "ret": "txt",
+    "paytoqs": "ignore",
+    "url": "https://data.weather.gov.hk/weatherAPI/cis/csvfile/SSH/ALL/daily_SSH_RF_ALL.csv",
+    "persist": false,
+    "requestTimeout": "60000",
+    "g": "c7b7f5b0f5c513da"
+  },
+  {
+    "id": "1d92db9cc78a3604",
+    "type": "csv",
+    "z": "3629cc25085416b8",
+    "name": "Daily rain CSV → rows",
+    "x": 810,
+    "y": 585,
+    "wires": [
+      [
+        "86721bb17c5fb853"
+      ]
+    ],
+    "sep": ",",
+    "hdrin": true,
+    "hdrout": "none",
+    "multi": "mult",
+    "ret": "\n",
+    "temp": "",
+    "skip": "2",
+    "strings": true,
+    "include_empty_strings": false,
+    "include_null_values": false,
+    "g": "c7b7f5b0f5c513da"
+  },
+  {
+    "id": "86721bb17c5fb853",
+    "type": "function",
+    "z": "3629cc25085416b8",
+    "name": "Keep quality flag + daily upsert",
+    "x": 1110,
+    "y": 585,
+    "wires": [
+      [
+        "9280569d690ea7f6"
+      ]
+    ],
+    "func": "if (msg.statusCode !== 200 || !Array.isArray(msg.payload)) throw new Error('Invalid rainfall CSV response');\nconst today = new Date(Date.now() + 28800000).toISOString().slice(0, 10);\nconst records = [];\nfor (const row of msg.payload) {\n    const cells = Object.values(row);\n    if (cells.length < 5 || !/^\\d{4}$/.test(String(cells[0]).trim())) continue;\n    const day = `${Number(cells[0])}-${String(Number(cells[1])).padStart(2, '0')}-${String(Number(cells[2])).padStart(2, '0')}`;\n    const date = new Date(`${day}T00:00:00Z`);\n    if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== day || day < '2021-01-01' || day >= today) continue;\n    const raw = String(cells[3]).trim();\n    const completeness = String(cells[4]).trim();\n    const value = /^\\d+(\\.\\d+)?$/.test(raw) ? Number(raw) : null;\n    records.push({_id: `SSH_rainfall_${day}`, station: 'SSH', metric: 'rainfall', day, raw, completeness, value, valid: value !== null && completeness === 'C', unit: 'mm', fetchedAt: new Date(), source: msg.responseUrl || msg.url});\n}\nif (!records.length) throw new Error('No valid rainfall dates');\nreturn [Array.from({length: Math.ceil(records.length / 1000)}, (unused, index) => ({sourceName: 'daily-rain', payload: [records.slice(index * 1000, (index + 1) * 1000).map(document => ({replaceOne: {filter: {_id: document._id}, replacement: document, upsert: true}})), {ordered: false}]}))];\n",
+    "outputs": 1,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "timeout": 30,
+    "g": "c7b7f5b0f5c513da"
+  },
+  {
+    "id": "9280569d690ea7f6",
+    "type": "mongodb3 in",
+    "z": "3629cc25085416b8",
+    "name": "Write Rain",
+    "x": 1410,
+    "y": 585,
+    "wires": [
+      [
+        "c1d5315b481e71e1"
+      ]
+    ],
+    "service": "_ext_",
+    "configNode": "098faa970407a996",
+    "collection": "weather",
+    "operation": "bulkWrite",
+    "g": "c7b7f5b0f5c513da"
+  },
+  {
+    "id": "273c37d8ad554819",
+    "type": "inject",
+    "z": "3629cc25085416b8",
+    "name": "Create indexes once",
+    "x": 210,
+    "y": 1215,
+    "wires": [
+      [
+        "0a9d885fef3e649b"
+      ]
+    ],
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "0",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "1",
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "g": "7254a0eb17c7a44e"
+  },
+  {
+    "id": "0a9d885fef3e649b",
+    "type": "function",
+    "z": "3629cc25085416b8",
+    "name": "Indexes + 14-day live-data retention",
+    "x": 510,
+    "y": 1215,
+    "wires": [
+      [
+        "7ea24cb76271adcd"
+      ]
+    ],
+    "func": "return [[\n    {collection: 'mtr_snapshots', payload: [{sampledAt: 1}, {name: 'mtr_raw_14_days', expireAfterSeconds: 1209600}]},\n    {collection: 'mtr_snapshots', payload: [{station: 1, sampledAt: -1}, {name: 'station_history'}]},\n    {collection: 'snapshots', payload: [{port: 1, group: 1, direction: 1, sampledAt: -1}, {name: 'status_history'}]},\n    {collection: 'snapshots', payload: [{sampledAt: 1}, {name: 'clearance_raw_14_days', expireAfterSeconds: 1209600}]},\n    {collection: 'weather_live', payload: [{metric: 1, station: 1, sourceAt: -1}, {name: 'live_weather_dates'}]},\n    {collection: 'weather_live', payload: [{observedAt: 1}, {name: 'weather_live_14_days', expireAfterSeconds: 1209600}]},\n    {collection: 'passengers', payload: [{port: 1, direction: 1, day: -1}, {name: 'simple_passenger_dates'}]},\n    {collection: 'weather', payload: [{station: 1, metric: 1, day: -1}, {name: 'weather_dates'}]}\n]];\n",
+    "outputs": 1,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "timeout": 30,
+    "g": "7254a0eb17c7a44e"
+  },
+  {
+    "id": "7ea24cb76271adcd",
+    "type": "mongodb3 in",
+    "z": "3629cc25085416b8",
+    "name": "Write Indexes",
+    "x": 810,
+    "y": 1215,
+    "wires": [
+      []
+    ],
+    "service": "_ext_",
+    "configNode": "098faa970407a996",
+    "collection": "",
+    "operation": "createIndex",
+    "g": "7254a0eb17c7a44e"
+  },
+  {
+    "id": "c1d5315b481e71e1",
+    "type": "function",
+    "z": "3629cc25085416b8",
+    "name": "Record successful database write",
+    "x": 1110,
+    "y": 1215,
+    "wires": [
+      []
+    ],
+    "func": "const health = flow.get('collectionHealth') || {};\nconst name = msg.sourceName || 'collection';\nhealth[name] = {savedAt: new Date().toISOString(), error: null};\nflow.set('collectionHealth', health);\nnode.status({fill: 'green', shape: 'dot', text: `${name}: saved`});\nreturn null;\n",
+    "outputs": 1,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "timeout": 30,
+    "g": "7254a0eb17c7a44e"
+  },
+  {
+    "id": "01ae5412f27d23a5",
+    "type": "catch",
+    "z": "3629cc25085416b8",
+    "name": "Collection / query errors",
+    "x": 1410,
+    "y": 1215,
+    "wires": [
+      [
+        "10d528d3f2689522"
+      ]
+    ],
+    "scope": null,
+    "uncaught": false,
+    "g": "7254a0eb17c7a44e"
+  },
+  {
+    "id": "10d528d3f2689522",
+    "type": "function",
+    "z": "3629cc25085416b8",
+    "name": "Keep live errors separate from historical views",
+    "x": 210,
+    "y": 1300,
+    "wires": [
+      [
+        "94172832a4e50772"
+      ],
+      [
+        "cf486baa06ef7f6a",
+        "299df15e615a7e8d"
+      ],
+      [
+        "8ee8821eb0e11260"
+      ]
+    ],
+    "func": "const error = msg.error?.message || 'Unexpected processing error';\nif (msg.socketid) {\n    const client = (flow.get('simpleClients') || {})[msg.socketid];\n    if (!client || client.sequence !== msg.sequence) return null;\n    return [{payload: {error}}, {socketid: msg.socketid, payload: {error: 'Query failed. Existing charts may be outdated.'}}, null];\n}\nconst health = flow.get('collectionHealth') || {};\nhealth[msg.sourceName || msg.topic || 'pipeline'] = {failedAt: new Date().toISOString(), error};\nflow.set('collectionHealth', health);\nreturn [{payload: {error}}, null, {payload: {error: 'A collection or live query failed. Existing values may be outdated.'}}];\n",
+    "outputs": 3,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "timeout": 30,
+    "g": "7254a0eb17c7a44e"
+  },
+  {
+    "id": "94172832a4e50772",
+    "type": "debug",
+    "z": "3629cc25085416b8",
+    "name": "Project error",
+    "x": 510,
+    "y": 1300,
+    "wires": [],
+    "active": true,
+    "tosidebar": true,
+    "console": true,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "g": "7254a0eb17c7a44e"
+  },
+  {
+    "id": "37e1083519b581f4",
+    "type": "ui_tab",
+    "name": "Live Connections",
+    "icon": "train",
+    "order": 2,
+    "disabled": false,
+    "hidden": false
+  },
+  {
+    "id": "d6ac0e545761d185",
+    "type": "ui_tab",
+    "name": "Passenger & Rainfall",
+    "icon": "show_chart",
+    "order": 3,
+    "disabled": false,
+    "hidden": false
+  },
+  {
+    "id": "4f5155c985c32822",
+    "type": "ui_tab",
+    "name": "Border Traffic Trends",
+    "icon": "timeline",
+    "order": 4,
+    "disabled": false,
+    "hidden": false
+  },
+  {
+    "id": "e8619e6eddfc61e6",
+    "type": "ui_group",
+    "name": "Border connections",
+    "tab": "37e1083519b581f4",
+    "order": 1,
+    "disp": true,
+    "width": "10",
+    "collapse": false
+  },
+  {
+    "id": "84567caa80669476",
+    "type": "ui_group",
+    "name": "Weather & recent rail predictions",
+    "tab": "37e1083519b581f4",
+    "order": 2,
+    "disp": true,
+    "width": "10",
+    "collapse": false
+  },
+  {
+    "id": "e10d97c504fe915f",
+    "type": "ui_group",
+    "name": "Daily passenger history",
+    "tab": "d6ac0e545761d185",
+    "order": 1,
+    "disp": true,
+    "width": "10",
+    "collapse": false
+  },
+  {
+    "id": "5fb65cf705e8d8b5",
+    "type": "ui_group",
+    "name": "Rainfall & daily passengers",
+    "tab": "d6ac0e545761d185",
+    "order": 2,
+    "disp": true,
+    "width": "10",
+    "collapse": false
+  },
+  {
+    "id": "2e7e851607ab44c6",
+    "type": "ui_group",
+    "name": "Daily border comparison",
+    "tab": "4f5155c985c32822",
+    "order": 1,
+    "disp": true,
+    "width": "18",
+    "collapse": false
+  },
+  {
+    "id": "b2357165e2588684",
+    "type": "ui_dropdown",
+    "z": "3629cc25085416b8",
+    "name": "Border",
+    "x": 1410,
+    "y": 900,
+    "wires": [
+      [
+        "dc889d54dc1cb658"
+      ]
+    ],
+    "group": "e10d97c504fe915f",
+    "order": 1,
+    "label": "Border",
+    "width": 10,
+    "height": 1,
+    "passthru": false,
+    "multiple": false,
+    "options": [
+      {
+        "value": "LWS",
+        "label": "Lo Wu",
+        "type": "str"
+      },
+      {
+        "value": "LSC",
+        "label": "Lok Ma Chau Spur Line",
+        "type": "str"
+      }
+    ],
+    "payload": "",
+    "topic": "port",
+    "topicType": "str",
+    "g": "591ab56b57fc8151"
+  },
+  {
+    "id": "0932dcccd39131c9",
+    "type": "ui_dropdown",
+    "z": "3629cc25085416b8",
+    "name": "History",
+    "x": 210,
+    "y": 985,
+    "wires": [
+      [
+        "dc889d54dc1cb658"
+      ]
+    ],
+    "group": "e10d97c504fe915f",
+    "order": 2,
+    "label": "History",
+    "width": 10,
+    "height": 1,
+    "passthru": false,
+    "multiple": false,
+    "options": [
+      {
+        "value": 30,
+        "label": "30 data days",
+        "type": "num"
+      },
+      {
+        "value": 90,
+        "label": "90 data days",
+        "type": "num"
+      },
+      {
+        "value": 365,
+        "label": "365 data days",
+        "type": "num"
+      }
+    ],
+    "payload": "",
+    "topic": "days",
+    "topicType": "str",
+    "g": "591ab56b57fc8151"
+  },
+  {
+    "id": "8ee8821eb0e11260",
+    "type": "ui_template",
+    "z": "3629cc25085416b8",
+    "name": "live-cards",
+    "x": 1410,
+    "y": 730,
+    "wires": [
+      []
+    ],
+    "group": "e8619e6eddfc61e6",
+    "order": 1,
+    "label": "",
+    "width": 10,
+    "height": 8,
+    "format": "<div class=\"simple-panel\">\n <div class=\"simple-error\" ng-if=\"msg.payload.error\">{{msg.payload.error}}</div>\n <div class=\"simple-title\">From Sheung Shui to the border</div>\n <div class=\"simple-muted\">HK resident clearance · {{msg.payload.now | date:'HH:mm:ss':'+0800'}} HKT</div>\n <div class=\"simple-grid\"><div class=\"simple-card\" ng-repeat=\"card in msg.payload.cards\"><strong>{{card.name}}</strong><div class=\"simple-clearance\"><div><span>Arriving in HK</span><span class=\"simple-tag simple-tag-{{card.arrival.tone}}\">{{card.arrival.label}}</span></div><div class=\"simple-muted\">{{card.arrival.sourceAt ? (card.arrival.sourceAt | date:'HH:mm':'+0800') + ' HKT' : 'No observation'}}</div><div><span>Departing HK</span><span class=\"simple-tag simple-tag-{{card.departure.tone}}\">{{card.departure.label}}</span></div><div class=\"simple-muted\">{{card.departure.sourceAt ? (card.departure.sourceAt | date:'HH:mm':'+0800') + ' HKT' : 'No observation'}}</div></div><div class=\"simple-muted\">Next train toward border</div><div class=\"simple-value\">{{card.waitMin == null ? '—' : card.waitMin}}<small style=\"font-size:13px\" ng-if=\"card.waitMin != null\"> min</small></div><div class=\"simple-muted\">{{card.railNote}}</div></div></div>\n <div class=\"simple-muted\">Predictions are not occupancy. Clearance grades are not exact waiting times.</div>\n</div>\n",
+    "storeOutMessages": false,
+    "fwdInMessages": false,
+    "resendOnRefresh": false,
+    "templateScope": "local",
+    "g": "591ab56b57fc8151"
+  },
+  {
+    "id": "f22049922afae9f8",
+    "type": "ui_template",
+    "z": "3629cc25085416b8",
+    "name": "train-table",
+    "x": 210,
+    "y": 815,
+    "wires": [
+      []
+    ],
+    "group": "e8619e6eddfc61e6",
+    "order": 2,
+    "label": "",
+    "width": 10,
+    "height": 4,
+    "format": "<div class=\"simple-panel\" ng-if=\"msg.payload.cards\"><strong>Upcoming trains</strong><table class=\"simple-table\"><thead><tr><th>Destination</th><th>Platform</th><th>ETA · HKT</th><th>Min</th></tr></thead><tbody ng-repeat=\"card in msg.payload.cards\"><tr ng-repeat=\"train in card.trains\"><td>{{card.destination === 'LOW' ? 'Lo Wu' : 'Lok Ma Chau'}}</td><td>{{train.platform}}</td><td>{{train.predictedAt | date:'HH:mm':'+0800'}}</td><td>{{train.waitMin}}</td></tr><tr ng-if=\"!card.trains.length\"><td>{{card.name}}</td><td colspan=\"3\">{{card.railNote}}</td></tr></tbody></table><div class=\"simple-muted\" style=\"margin-top:8px\">Next two matching predictions. A missing destination does not prove no service.</div></div>\n",
+    "storeOutMessages": false,
+    "fwdInMessages": false,
+    "resendOnRefresh": false,
+    "templateScope": "local",
+    "g": "591ab56b57fc8151"
+  },
+  {
+    "id": "50fbcef764bc055d",
+    "type": "ui_template",
+    "z": "3629cc25085416b8",
+    "name": "weather-card",
+    "x": 510,
+    "y": 815,
+    "wires": [
+      []
+    ],
+    "group": "84567caa80669476",
+    "order": 1,
+    "label": "",
+    "width": 10,
+    "height": 4,
+    "format": "<div class=\"simple-panel\" ng-if=\"msg.payload.cards\"><div class=\"simple-grid\"><div ng-repeat=\"record in msg.payload.weather\"><div>{{record.metric === 'temperature' ? 'Temperature' : 'Past-hour district max rain'}}</div><div class=\"simple-value\">{{record.fresh ? (record.value | number:1) : '—'}}<small style=\"font-size:13px\"> {{record.unit}}</small></div><div class=\"simple-muted\">{{record.station}} · {{record.sourceAt | date:'HH:mm':'+0800'}} HKT</div></div></div><div class=\"simple-muted\">Regional proxies, not checkpoint sensors. Stale or missing values show —.</div><hr><div class=\"simple-muted\">{{msg.payload.savedSources}} sources saved · API → MongoDB → Dashboard</div><div class=\"simple-error\" ng-if=\"msg.payload.errors\">Collection error: {{msg.payload.errors}}</div></div>\n",
+    "storeOutMessages": false,
+    "fwdInMessages": false,
+    "resendOnRefresh": false,
+    "templateScope": "local",
+    "g": "591ab56b57fc8151"
+  },
+  {
+    "id": "d0e4fc44a5919bab",
+    "type": "ui_chart",
+    "z": "3629cc25085416b8",
+    "name": "Predicted next-train wait · 5-min mean (min)",
+    "x": 810,
+    "y": 815,
+    "wires": [
+      []
+    ],
+    "group": "84567caa80669476",
+    "order": 2,
+    "label": "Predicted next-train wait · 5-min mean (min)",
+    "width": 10,
+    "height": 5,
+    "chartType": "line",
+    "legend": "true",
+    "xformat": "HH:mm",
+    "interpolate": "linear",
+    "nodata": "Collecting / no matching records",
+    "dot": true,
+    "ymin": "0",
+    "ymax": "",
+    "removeOlder": "10",
+    "removeOlderUnit": "31536000",
+    "removeOlderPoints": "",
+    "useUTC": false,
+    "colors": [
+      "#248792",
+      "#dc9b4c"
+    ],
+    "outputs": 1,
+    "useOneColor": false,
+    "useDifferentColor": true,
+    "className": "",
+    "g": "591ab56b57fc8151"
+  },
+  {
+    "id": "cf486baa06ef7f6a",
+    "type": "ui_template",
+    "z": "3629cc25085416b8",
+    "name": "history-summary",
+    "x": 510,
+    "y": 985,
+    "wires": [
+      []
+    ],
+    "group": "e10d97c504fe915f",
+    "order": 3,
+    "label": "",
+    "width": 10,
+    "height": 4,
+    "format": "<div class=\"simple-panel\"><div class=\"simple-error\" ng-if=\"msg.payload.error\">{{msg.payload.error}}</div><div ng-if=\"msg.payload.name\"><div class=\"simple-title\">{{msg.payload.name}} · outbound HK residents</div><div class=\"simple-grid\"><div><div class=\"simple-muted\">Latest daily count</div><div class=\"simple-value\">{{msg.payload.latest ? (msg.payload.latest.resident | number:0) : '—'}}</div><div class=\"simple-muted\">{{msg.payload.latest.day || 'No data'}}</div></div><div><div class=\"simple-muted\">Daily mean</div><div class=\"simple-value\">{{msg.payload.mean == null ? '—' : (msg.payload.mean | number:0)}}</div></div></div><div class=\"simple-muted\">Weekday {{msg.payload.weekdayMean | number:0}} · Weekend {{msg.payload.weekendMean | number:0}}<br>{{msg.payload.start}} — {{msg.payload.end}} · daily counts, not live crowds.</div></div></div>\n",
+    "storeOutMessages": false,
+    "fwdInMessages": false,
+    "resendOnRefresh": false,
+    "templateScope": "local",
+    "g": "591ab56b57fc8151"
+  },
+  {
+    "id": "f15e63f9096a5f4d",
+    "type": "ui_chart",
+    "z": "3629cc25085416b8",
+    "name": "Outbound HK residents · daily passengers",
+    "x": 810,
+    "y": 985,
+    "wires": [
+      []
+    ],
+    "group": "e10d97c504fe915f",
+    "order": 4,
+    "label": "Outbound HK residents · daily passengers",
+    "width": 10,
+    "height": 5,
+    "chartType": "line",
+    "legend": "true",
+    "xformat": "YYYY-MM-DD",
+    "interpolate": "linear",
+    "nodata": "Collecting / no matching records",
+    "dot": false,
+    "ymin": "0",
+    "ymax": "",
+    "removeOlder": "10",
+    "removeOlderUnit": "31536000",
+    "removeOlderPoints": "",
+    "useUTC": true,
+    "colors": [
+      "#248792",
+      "#dc9b4c"
+    ],
+    "outputs": 1,
+    "useOneColor": false,
+    "useDifferentColor": true,
+    "className": "{{msg.socketid}}",
+    "g": "591ab56b57fc8151"
+  },
+  {
+    "id": "d6a74e1f89af5e22",
+    "type": "ui_template",
+    "z": "3629cc25085416b8",
+    "name": "rain-summary",
+    "x": 1110,
+    "y": 985,
+    "wires": [
+      []
+    ],
+    "group": "5fb65cf705e8d8b5",
+    "order": 1,
+    "label": "",
+    "width": 10,
+    "height": 5,
+    "format": "<div class=\"simple-panel\" ng-if=\"msg.payload.name\"><div class=\"simple-title\">Rainfall × daily passengers</div><div class=\"simple-muted\">{{msg.payload.name}} · Sheung Shui weather proxy<br>{{msg.payload.pairs}} valid paired days · {{msg.payload.pairedStart || 'No pairs'}} — {{msg.payload.pairedEnd || '—'}}</div><div class=\"simple-grid\"><div><div class=\"simple-muted\">Pearson r</div><div class=\"simple-value\">{{msg.payload.coefficient == null ? '—' : (msg.payload.coefficient | number:3)}}</div></div><div><div class=\"simple-muted\">Wet / dry daily mean</div><div style=\"margin:7px 0;font-size:18px\">{{msg.payload.wetMean == null ? '—' : (msg.payload.wetMean | number:0)}} / {{msg.payload.dryMean == null ? '—' : (msg.payload.dryMean | number:0)}}</div><div class=\"simple-muted\">{{msg.payload.wetDays}} / {{msg.payload.dryDays}} days · wet ≥1 mm</div></div></div><div class=\"simple-muted\">{{msg.payload.reason}} Historical weather has a publication lag. Holidays, seasons and weekday patterns are not controlled.</div></div>\n",
+    "storeOutMessages": false,
+    "fwdInMessages": false,
+    "resendOnRefresh": false,
+    "templateScope": "local",
+    "g": "591ab56b57fc8151"
+  },
+  {
+    "id": "e3d62571c6149972",
+    "type": "ui_template",
+    "z": "3629cc25085416b8",
+    "name": "scatter",
+    "x": 1410,
+    "y": 985,
+    "wires": [
+      []
+    ],
+    "group": "5fb65cf705e8d8b5",
+    "order": 2,
+    "label": "",
+    "width": 10,
+    "height": 6,
+    "format": "<div class=\"simple-panel\" ng-if=\"msg.payload.points\"><strong>Same-day rainfall and passenger count</strong><div class=\"simple-muted\">One point per valid matched date</div><svg viewBox=\"0 0 550 275\" style=\"width:100%;max-height:255px\" role=\"img\" aria-label=\"Rainfall and daily passenger scatter plot\"><g ng-repeat=\"tick in msg.payload.ticks\"><line x1=\"62\" x2=\"512\" ng-attr-y1=\"{{tick.y}}\" ng-attr-y2=\"{{tick.y}}\" stroke=\"#77858b\" opacity=\".5\"></line><text x=\"55\" ng-attr-y=\"{{tick.y+4}}\" fill=\"currentColor\" font-size=\"10\" text-anchor=\"end\">{{tick.passengers | number:0}}</text><text ng-attr-x=\"{{tick.x}}\" y=\"240\" fill=\"currentColor\" font-size=\"10\" text-anchor=\"middle\">{{tick.rain}}</text></g><circle ng-repeat=\"point in msg.payload.points\" ng-attr-cx=\"{{point.x}}\" ng-attr-cy=\"{{point.y}}\" r=\"3\" fill=\"#29a2a8\" opacity=\".65\"><title>{{point.day}} · {{point.rain}} mm · {{point.passengers}} passengers</title></circle><text x=\"62\" y=\"16\" fill=\"currentColor\" font-size=\"11\">Passengers / day</text><text x=\"280\" y=\"266\" fill=\"currentColor\" font-size=\"11\" text-anchor=\"middle\">Sheung Shui daily rainfall (mm)</text></svg><div class=\"simple-muted\" ng-if=\"!msg.payload.points.length\">No valid pairs. No synthetic records.</div></div>\n",
+    "storeOutMessages": false,
+    "fwdInMessages": false,
+    "resendOnRefresh": false,
+    "templateScope": "local",
+    "g": "591ab56b57fc8151"
+  },
+  {
+    "id": "f23bb77971322a9d",
+    "type": "ui_dropdown",
+    "z": "3629cc25085416b8",
+    "name": "Borders (multi-select)",
+    "x": 210,
+    "y": 1070,
+    "wires": [
+      [
+        "dc889d54dc1cb658"
+      ]
+    ],
+    "group": "2e7e851607ab44c6",
+    "order": 1,
+    "label": "Borders (multi-select)",
+    "width": 9,
+    "height": 1,
+    "passthru": false,
+    "multiple": true,
+    "options": [
+      {
+        "value": "LWS",
+        "label": "Lo Wu",
+        "type": "str"
+      },
+      {
+        "value": "LSC",
+        "label": "Lok Ma Chau Spur Line",
+        "type": "str"
+      },
+      {
+        "value": "LMC",
+        "label": "Lok Ma Chau",
+        "type": "str"
+      },
+      {
+        "value": "SBC",
+        "label": "Shenzhen Bay",
+        "type": "str"
+      },
+      {
+        "value": "HYW",
+        "label": "Heung Yuen Wai",
+        "type": "str"
+      },
+      {
+        "value": "HZM",
+        "label": "Hong Kong-Zhuhai-Macao Bridge",
+        "type": "str"
+      },
+      {
+        "value": "MKT",
+        "label": "Man Kam To",
+        "type": "str"
+      },
+      {
+        "value": "STK",
+        "label": "Sha Tau Kok",
+        "type": "str"
+      }
+    ],
+    "payload": "",
+    "topic": "comparePorts",
+    "topicType": "str",
+    "g": "591ab56b57fc8151"
+  },
+  {
+    "id": "1fee3b6af83af1cd",
+    "type": "ui_dropdown",
+    "z": "3629cc25085416b8",
+    "name": "History",
+    "x": 510,
+    "y": 1070,
+    "wires": [
+      [
+        "dc889d54dc1cb658"
+      ]
+    ],
+    "group": "2e7e851607ab44c6",
+    "order": 2,
+    "label": "History",
+    "width": 9,
+    "height": 1,
+    "passthru": false,
+    "multiple": false,
+    "options": [
+      {
+        "value": 30,
+        "label": "30 data dates",
+        "type": "num"
+      },
+      {
+        "value": 90,
+        "label": "90 data dates",
+        "type": "num"
+      },
+      {
+        "value": 365,
+        "label": "365 data dates",
+        "type": "num"
+      }
+    ],
+    "payload": "",
+    "topic": "trendDays",
+    "topicType": "str",
+    "g": "591ab56b57fc8151"
+  },
+  {
+    "id": "299df15e615a7e8d",
+    "type": "ui_template",
+    "z": "3629cc25085416b8",
+    "name": "trend-summary",
+    "x": 810,
+    "y": 1070,
+    "wires": [
+      []
+    ],
+    "group": "2e7e851607ab44c6",
+    "order": 3,
+    "label": "",
+    "width": 18,
+    "height": 4,
+    "format": "<div class=\"simple-panel\"><div class=\"simple-error\" ng-if=\"msg.payload.error\">{{msg.payload.error}}</div><div class=\"simple-title\">Outbound HK residents · border comparison</div><div class=\"simple-muted\">Trend: {{msg.payload.start || 'No observations'}} — {{msg.payload.end || '—'}} · latest {{msg.payload.requestedDays}} data dates.<br>Last complete week (HK): {{msg.payload.weekStart || '—'}} — {{msg.payload.weekEnd || '—'}} · actual daily counts, not averages. Missing records are not zero.</div><div class=\"simple-grid\"><div ng-repeat=\"border in msg.payload.borders\"><strong>{{border.name}}</strong><div class=\"simple-muted\">Trend: {{border.count}} days · mean {{border.mean == null ? '—' : (border.mean | number:0)}}/day · Week: {{border.weekCount}}/7 days</div></div></div></div>\n",
+    "storeOutMessages": false,
+    "fwdInMessages": false,
+    "resendOnRefresh": false,
+    "templateScope": "local",
+    "g": "591ab56b57fc8151"
+  },
+  {
+    "id": "12768864a81f6405",
+    "type": "ui_chart",
+    "z": "3629cc25085416b8",
+    "name": "Outbound HK residents · daily comparison",
+    "x": 1110,
+    "y": 1070,
+    "wires": [
+      []
+    ],
+    "group": "2e7e851607ab44c6",
+    "order": 4,
+    "label": "Outbound HK residents · daily comparison",
+    "width": 9,
+    "height": 6,
+    "chartType": "line",
+    "legend": "true",
+    "xformat": "YYYY-MM-DD",
+    "interpolate": "linear",
+    "nodata": "Collecting / no matching records",
+    "dot": false,
+    "ymin": "0",
+    "ymax": "",
+    "removeOlder": "10",
+    "removeOlderUnit": "31536000",
+    "removeOlderPoints": "",
+    "useUTC": true,
+    "colors": [
+      "#248792",
+      "#dc9b4c",
+      "#7463ad",
+      "#bd537c",
+      "#52864d",
+      "#427bb8",
+      "#a76845",
+      "#65747f"
+    ],
+    "outputs": 1,
+    "useOneColor": false,
+    "useDifferentColor": true,
+    "className": "{{msg.socketid}}",
+    "g": "591ab56b57fc8151"
+  },
+  {
+    "id": "031cb8107d93c6fd",
+    "type": "ui_chart",
+    "z": "3629cc25085416b8",
+    "name": "Last complete week · daily passengers",
+    "x": 1410,
+    "y": 1070,
+    "wires": [
+      []
+    ],
+    "group": "2e7e851607ab44c6",
+    "order": 5,
+    "label": "Last complete week · daily passengers",
+    "width": 9,
+    "height": 6,
+    "chartType": "bar",
+    "legend": "true",
+    "xformat": "YYYY-MM-DD",
+    "interpolate": "linear",
+    "nodata": "Collecting / no matching records",
+    "dot": false,
+    "ymin": "0",
+    "ymax": "",
+    "removeOlder": "10",
+    "removeOlderUnit": "31536000",
+    "removeOlderPoints": "",
+    "useUTC": true,
+    "colors": [
+      "#248792",
+      "#dc9b4c",
+      "#7463ad",
+      "#bd537c",
+      "#52864d",
+      "#427bb8",
+      "#a76845",
+      "#65747f"
+    ],
+    "outputs": 1,
+    "useOneColor": false,
+    "useDifferentColor": true,
+    "className": "{{msg.socketid}}",
+    "g": "591ab56b57fc8151"
+  },
+  {
+    "id": "588810013c533577",
+    "type": "ui_template",
+    "z": "3629cc25085416b8",
+    "name": "Small panel styles",
+    "x": 810,
+    "y": 1300,
+    "wires": [
+      []
+    ],
+    "group": "",
+    "order": 0,
+    "width": 0,
+    "height": 0,
+    "format": "<style>\n.simple-panel{box-sizing:border-box;padding:14px;height:100%;overflow:auto;font-family:inherit;line-height:1.5}.simple-title{font-size:18px;font-weight:600;margin-bottom:8px}.simple-muted{font-size:11px;opacity:.75}.simple-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:10px 0}.simple-card{border:1px solid #64838b;border-radius:6px;padding:12px}.simple-value{font-size:27px;font-weight:600;margin:5px 0}.simple-tag{display:inline-block;padding:3px 8px;background:#e7f2f2;color:#20646a;border-radius:4px;font-size:12px}.simple-error{background:#fff0d3;color:#80541b;padding:10px;border-radius:4px}.simple-table{width:100%;border-collapse:collapse;font-size:12px}.simple-table td,.simple-table th{padding:7px 4px;border-bottom:1px solid #647680;text-align:right}.simple-table td:first-child,.simple-table th:first-child{text-align:left}.simple-panel hr{border:0;border-top:1px solid #647680;margin:12px 0}\n.simple-clearance{margin:12px 0}.simple-clearance>div:not(.simple-muted){display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px;font-size:12px;margin-top:8px}.simple-tag-normal{background:#e1f2e7;color:#17633c}.simple-tag-busy{background:#fff0cb;color:#805400}.simple-tag-very-busy{background:#fde2e2;color:#9b2424}.simple-tag-unavailable{background:#e8e9ec;color:#525965}\n</style>\n",
+    "storeOutMessages": false,
+    "fwdInMessages": false,
+    "resendOnRefresh": false,
+    "templateScope": "global",
+    "g": "7254a0eb17c7a44e"
+  },
+  {
+    "id": "f6d00208e146fd9c",
+    "type": "ui_ui_control",
+    "z": "3629cc25085416b8",
+    "name": "Browser connect / disconnect",
+    "x": 1410,
+    "y": 815,
+    "wires": [
+      [
+        "dc889d54dc1cb658"
+      ]
+    ],
+    "events": "all",
+    "g": "591ab56b57fc8151"
+  },
+  {
+    "id": "dc889d54dc1cb658",
+    "type": "function",
+    "z": "3629cc25085416b8",
+    "name": "Per-browser selection",
+    "x": 210,
+    "y": 900,
+    "wires": [
+      [
+        "8e7bb1628df15b2d"
+      ],
+      [
+        "4c5725786f98b4f9"
+      ],
+      [
+        "b2357165e2588684"
+      ],
+      [
+        "0932dcccd39131c9"
+      ],
+      [
+        "f23bb77971322a9d"
+      ],
+      [
+        "1fee3b6af83af1cd"
+      ]
+    ],
+    "func": "const clients = flow.get('simpleClients') || {};\nconst portNames = {\"LWS\": \"Lo Wu\", \"LSC\": \"Lok Ma Chau Spur Line\", \"LMC\": \"Lok Ma Chau\", \"SBC\": \"Shenzhen Bay\", \"HYW\": \"Heung Yuen Wai\", \"HZM\": \"Hong Kong-Zhuhai-Macao Bridge\", \"MKT\": \"Man Kam To\", \"STK\": \"Sha Tau Kok\"};\nfor (const [socket, client] of Object.entries(clients)) {\n    if (Date.now() - client.seenAt > 86400000) delete clients[socket];\n}\nif (msg.payload === 'lost') {\n    delete clients[msg.socketid];\n    flow.set('simpleClients', clients);\n    return null;\n}\nconst sockets = msg.topic === 'refresh' ? Object.keys(clients) : msg.socketid ? [msg.socketid] : [];\nconst queries = [];\nconst ports = [];\nconst days = [];\nconst comparisons = [];\nconst trendDays = [];\nfor (const socket of sockets) {\n    const client = clients[socket] || {port: 'LWS', days: 365, sequence: 0};\n    client.comparePorts = client.comparePorts || ['LWS', 'LSC'];\n    client.trendDays = client.trendDays || 30;\n    if (msg.topic === 'port' && ['LWS', 'LSC'].includes(msg.payload)) client.port = msg.payload;\n    if (msg.topic === 'days' && [30, 90, 365].includes(Number(msg.payload))) client.days = Number(msg.payload);\n    if (msg.topic === 'comparePorts' && Array.isArray(msg.payload)) {\n        const selected = [...new Set(msg.payload.filter(port => Object.hasOwn(portNames, port)))];\n        client.comparePorts = selected.length ? selected : ['LWS', 'LSC'];\n    }\n    if (msg.topic === 'trendDays' && [30, 90, 365].includes(Number(msg.payload))) client.trendDays = Number(msg.payload);\n    client.sequence += 1;\n    client.seenAt = Date.now();\n    clients[socket] = client;\n    queries.push({socketid: socket, port: client.port, days: client.days, comparePorts: client.comparePorts, trendDays: client.trendDays, sequence: client.sequence});\n    ports.push({socketid: socket, payload: client.port});\n    days.push({socketid: socket, payload: client.days});\n    comparisons.push({socketid: socket, payload: client.comparePorts});\n    trendDays.push({socketid: socket, payload: client.trendDays});\n}\nflow.set('simpleClients', clients);\nif (msg.payload === 'connect' || msg.payload === 'change') {\n    setTimeout(() => {\n        const current = flow.get('simpleClients') || {};\n        queries.filter(query => current[query.socketid]?.sequence === query.sequence).forEach(query => {\n            node.send([null, query, {socketid: query.socketid, payload: query.port}, {socketid: query.socketid, payload: query.days}, {socketid: query.socketid, payload: query.comparePorts}, {socketid: query.socketid, payload: query.trendDays}]);\n        });\n    }, 150);\n}\nreturn [msg.payload === 'connect' ? {} : null, queries, ports, days, comparisons, trendDays];\n",
+    "outputs": 6,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "timeout": 30,
+    "g": "591ab56b57fc8151"
+  },
+  {
+    "id": "7a80835d27fc08d5",
+    "type": "inject",
+    "z": "3629cc25085416b8",
+    "name": "Read live data · 10 s",
+    "x": 210,
+    "y": 730,
+    "wires": [
+      [
+        "8e7bb1628df15b2d"
+      ]
+    ],
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "10",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "8",
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "g": "591ab56b57fc8151"
+  },
+  {
+    "id": "8e7bb1628df15b2d",
+    "type": "function",
+    "z": "3629cc25085416b8",
+    "name": "Read rail + queue + weather from MongoDB",
+    "x": 510,
+    "y": 730,
+    "wires": [
+      [
+        "579e01244de8f617"
+      ]
+    ],
+    "func": "const cutoff = new Date(Date.now() - 6 * 3600000);\nmsg.payload = [[\n    {$match: {station: 'SHS'}},\n    {$facet: {\n        latest: [{$sort: {sampledAt: -1}}, {$limit: 1}],\n        history: [{$match: {sourceFresh: true, sourceAt: {$gte: cutoff}}}, {$unwind: '$routes'}, {$match: {'routes.destination': {$in: ['LOW', 'LMC']}, 'routes.waitMin': {$ne: null}}}, {$group: {_id: {time: {$dateTrunc: {date: '$sourceAt', unit: 'minute', binSize: 5}}, destination: '$routes.destination'}, waitMin: {$avg: '$routes.waitMin'}}}, {$sort: {'_id.time': 1}}]\n    }},\n    {$lookup: {from: 'snapshots', pipeline: [{$match: {port: {$in: ['LWS', 'LSC']}, group: 'resident', direction: {$in: ['arrival', 'departure']}}}, {$sort: {sampledAt: -1}}, {$group: {_id: {port: '$port', direction: '$direction'}, record: {$first: '$$ROOT'}}}, {$replaceRoot: {newRoot: '$record'}}], as: 'queues'}},\n    {$lookup: {from: 'weather_live', pipeline: [{$match: {$or: [{metric: 'temperature', station: 'Ta Kwu Ling'}, {metric: 'rainfall', station: 'North District'}]}}, {$sort: {sourceAt: -1}}, {$group: {_id: '$metric', record: {$first: '$$ROOT'}}}, {$replaceRoot: {newRoot: '$record'}}], as: 'weather'}}\n]];\nreturn msg;\n",
+    "outputs": 1,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "timeout": 30,
+    "g": "591ab56b57fc8151"
+  },
+  {
+    "id": "579e01244de8f617",
+    "type": "mongodb3 in",
+    "z": "3629cc25085416b8",
+    "name": "Read Live",
+    "x": 810,
+    "y": 730,
+    "wires": [
+      [
+        "5d11d276c9d19f8c"
+      ]
+    ],
+    "service": "_ext_",
+    "configNode": "098faa970407a996",
+    "collection": "mtr_snapshots",
+    "operation": "aggregate.toArray",
+    "g": "591ab56b57fc8151"
+  },
+  {
+    "id": "5d11d276c9d19f8c",
+    "type": "function",
+    "z": "3629cc25085416b8",
+    "name": "Format live cards + train chart",
+    "x": 1110,
+    "y": 730,
+    "wires": [
+      [
+        "8ee8821eb0e11260",
+        "f22049922afae9f8",
+        "50fbcef764bc055d"
+      ],
+      [
+        "d0e4fc44a5919bab"
+      ]
+    ],
+    "func": "const result = Object.values(msg.payload)[0] || {latest: [], queues: [], weather: [], history: []};\nconst now = Date.now();\nconst fresh = (value, age) => value && now - new Date(value).getTime() >= -300000 && now - new Date(value).getTime() <= age;\nconst rail = result.latest[0];\nconst trainFresh = rail?.sourceFresh && fresh(rail.sourceAt, 120000) && fresh(rail.observedAt, 120000);\nconst labels = {0: 'Normal', 1: 'Busy', 2: 'Very busy', 4: 'Maintenance', 99: 'Non-service hours'};\nconst tones = {0: 'normal', 1: 'busy', 2: 'very-busy'};\nconst cards = [['LWS', 'Lo Wu', 'LOW'], ['LSC', 'Lok Ma Chau Spur Line', 'LMC']].map(([port, name, destination]) => {\n    const clearance = direction => {\n        const queue = result.queues.find(row => row.port === port && row.direction === direction);\n        const queueFresh = queue?.sourceFresh && fresh(queue.observedAt, 2700000) && fresh(queue.sourceModifiedAt, 2700000);\n        return {label: queueFresh ? labels[queue.code] || 'Unavailable' : 'Stale / unavailable', tone: queueFresh ? tones[queue.code] || 'unavailable' : 'unavailable', sourceAt: queue?.sourceModifiedAt};\n    };\n    const route = rail?.routes.find(row => row.destination === destination);\n    return {name, destination, arrival: clearance('arrival'), departure: clearance('departure'),\n        waitMin: trainFresh ? route?.waitMin ?? null : null, trains: trainFresh ? route?.trains.slice(0, 2) || [] : [],\n        railNote: !trainFresh ? 'Stale / unavailable' : !route?.trains.length ? 'No matching prediction' : rail.delayReported ? 'Delay reported by MTR' : 'Prediction available'};\n});\nconst weather = result.weather.map(record => ({...record, fresh: record.valid && fresh(record.sourceAt, 5400000) && fresh(record.observedAt, 2700000)}));\nconst health = flow.get('collectionHealth') || {};\nconst data = {cards, weather, now: new Date().toISOString(), savedSources: Object.values(health).filter(record => !record.error).length, errors: Object.entries(health).filter(([name, record]) => record.error).map(([name]) => name).join(', ')};\nconst payload = [{series: ['Lo Wu', 'Lok Ma Chau'], data: ['LOW', 'LMC'].map(destination => result.history.filter(row => row._id.destination === destination).map(row => ({x: new Date(row._id.time).getTime(), y: row.waitMin}))), labels: ['']}];\nreturn [{payload: data}, {payload}];\n",
+    "outputs": 2,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "timeout": 30,
+    "g": "591ab56b57fc8151"
+  },
+  {
+    "id": "cac197f2a866a020",
+    "type": "inject",
+    "z": "3629cc25085416b8",
+    "name": "Read history · 60 s",
+    "x": 1110,
+    "y": 815,
+    "wires": [
+      [
+        "dc889d54dc1cb658"
+      ]
+    ],
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "60",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "12",
+    "topic": "refresh",
+    "payload": "",
+    "payloadType": "date",
+    "g": "591ab56b57fc8151"
+  },
+  {
+    "id": "4c5725786f98b4f9",
+    "type": "function",
+    "z": "3629cc25085416b8",
+    "name": "Read passenger history + comparisons + rain",
+    "x": 510,
+    "y": 900,
+    "wires": [
+      [
+        "046e3f6f3c6e755e"
+      ]
+    ],
+    "func": "const client = (flow.get('simpleClients') || {})[msg.socketid];\nif (!client || client.sequence !== msg.sequence) return null;\nconst hkNow = new Date(Date.now() + 28800000);\nconst today = Date.UTC(hkNow.getUTCFullYear(), hkNow.getUTCMonth(), hkNow.getUTCDate());\nconst daysSinceMonday = (new Date(today).getUTCDay() + 6) % 7;\nconst weekStart = today - (daysSinceMonday + 7) * 86400000;\nmsg.weekDates = Array.from({length: 7}, (unused, index) => new Date(weekStart + index * 86400000).toISOString().slice(0, 10));\nmsg.weekStart = msg.weekDates[0];\nmsg.weekEnd = msg.weekDates[6];\nmsg.payload = [[\n    {$match: {port: {$in: [...new Set([msg.port, ...msg.comparePorts])]}, direction: 'departure'}},\n    {$facet: {\n        selected: [{$match: {port: msg.port}}, {$sort: {day: -1}}, {$limit: msg.days}, {$sort: {day: 1}}, {$group: {_id: null, days: {$push: {day: '$day', resident: '$resident', weekend: '$weekend'}}}}],\n        comparison: [{$match: {port: {$in: msg.comparePorts}}}, {$group: {_id: '$day', records: {$push: {port: '$port', day: '$day', resident: '$resident'}}}}, {$sort: {_id: -1}}, {$limit: msg.trendDays}, {$unwind: '$records'}, {$replaceRoot: {newRoot: '$records'}}, {$sort: {day: 1, port: 1}}],\n        weekly: [{$match: {port: {$in: msg.comparePorts}, day: {$gte: msg.weekStart, $lte: msg.weekEnd}}}, {$project: {_id: 0, port: 1, day: 1, resident: 1}}, {$sort: {day: 1, port: 1}}]\n    }},\n    {$project: {days: {$ifNull: [{$arrayElemAt: ['$selected.days', 0]}, []]}, comparison: 1, weekly: 1}},\n    {$lookup: {from: 'weather', pipeline: [\n        {$match: {station: 'SSH', metric: 'rainfall'}}, {$sort: {day: -1}}, {$limit: msg.days}, {$sort: {day: 1}},\n        {$lookup: {from: 'passengers', let: {key: {$concat: ['$day', `_${msg.port}_departure`]}}, pipeline: [{$match: {$expr: {$eq: ['$_id', '$$key']}}}, {$project: {resident: 1}}], as: 'passenger'}}\n    ], as: 'rain'}}\n]];\nreturn msg;\n",
+    "outputs": 1,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "timeout": 30,
+    "g": "591ab56b57fc8151"
+  },
+  {
+    "id": "046e3f6f3c6e755e",
+    "type": "mongodb3 in",
+    "z": "3629cc25085416b8",
+    "name": "Read History",
+    "x": 810,
+    "y": 900,
+    "wires": [
+      [
+        "8d44d710731f145b"
+      ]
+    ],
+    "service": "_ext_",
+    "configNode": "098faa970407a996",
+    "collection": "passengers",
+    "operation": "aggregate.toArray",
+    "g": "591ab56b57fc8151"
+  },
+  {
+    "id": "8d44d710731f145b",
+    "type": "function",
+    "z": "3629cc25085416b8",
+    "name": "Daily means + Pearson r + border trends",
+    "x": 1110,
+    "y": 900,
+    "wires": [
+      [
+        "cf486baa06ef7f6a",
+        "d6a74e1f89af5e22",
+        "e3d62571c6149972"
+      ],
+      [
+        "f15e63f9096a5f4d"
+      ],
+      [
+        "12768864a81f6405"
+      ],
+      [
+        "031cb8107d93c6fd"
+      ],
+      [
+        "299df15e615a7e8d"
+      ]
+    ],
+    "func": "const client = (flow.get('simpleClients') || {})[msg.socketid];\nif (!client || client.sequence !== msg.sequence) return null;\nconst result = Object.values(msg.payload)[0] || {days: [], rain: [], comparison: []};\nconst mean = values => values.length ? values.reduce((total, value) => total + value, 0) / values.length : null;\nconst days = result.days;\nconst pairs = result.rain.filter(row => row.valid && row.completeness === 'C' && row.value !== null && row.passenger.length).map(row => ({day: row.day, rain: row.value, passengers: row.passenger[0].resident}));\nlet coefficient = null;\nlet reason = 'At least 30 valid paired days required.';\nif (pairs.length >= 30) {\n    const meanRain = mean(pairs.map(pair => pair.rain));\n    const meanPassengers = mean(pairs.map(pair => pair.passengers));\n    let cross = 0;\n    let rainVariance = 0;\n    let passengerVariance = 0;\n    for (const pair of pairs) {\n        const rainDifference = pair.rain - meanRain;\n        const passengerDifference = pair.passengers - meanPassengers;\n        cross += rainDifference * passengerDifference;\n        rainVariance += rainDifference ** 2;\n        passengerVariance += passengerDifference ** 2;\n    }\n    coefficient = rainVariance && passengerVariance ? Math.max(-1, Math.min(1, cross / Math.sqrt(rainVariance * passengerVariance))) : null;\n    reason = coefficient === null ? 'No variation in at least one variable.' : 'Descriptive association, not causation.';\n}\nconst maximumRain = Math.max(...pairs.map(pair => pair.rain), 1);\nconst maximumPassengers = Math.max(...pairs.map(pair => pair.passengers), 1) * 1.05;\nconst data = {\n    name: msg.port === 'LWS' ? 'Lo Wu' : 'Lok Ma Chau Spur Line', latest: days.at(-1) || null,\n    start: days[0]?.day, end: days.at(-1)?.day,\n    mean: mean(days.map(row => row.resident)), weekdayMean: mean(days.filter(row => !row.weekend).map(row => row.resident)), weekendMean: mean(days.filter(row => row.weekend).map(row => row.resident)),\n    coefficient, reason, pairs: pairs.length, pairedStart: pairs[0]?.day, pairedEnd: pairs.at(-1)?.day,\n    wetMean: mean(pairs.filter(pair => pair.rain >= 1).map(pair => pair.passengers)), dryMean: mean(pairs.filter(pair => pair.rain < 1).map(pair => pair.passengers)),\n    wetDays: pairs.filter(pair => pair.rain >= 1).length, dryDays: pairs.filter(pair => pair.rain < 1).length,\n    points: pairs.map(pair => ({...pair, x: 62 + pair.rain / maximumRain * 450, y: 220 - pair.passengers / maximumPassengers * 190})),\n    ticks: Array.from({length: 5}, (unused, index) => ({x: 62 + index * 450 / 4, rain: (index * maximumRain / 4).toFixed(1), y: 220 - index * 190 / 4, passengers: Math.round(index * maximumPassengers / 4)}))\n};\nconst portNames = {\"LWS\": \"Lo Wu\", \"LSC\": \"Lok Ma Chau Spur Line\", \"LMC\": \"Lok Ma Chau\", \"SBC\": \"Shenzhen Bay\", \"HYW\": \"Heung Yuen Wai\", \"HZM\": \"Hong Kong-Zhuhai-Macao Bridge\", \"MKT\": \"Man Kam To\", \"STK\": \"Sha Tau Kok\"};\nconst comparison = result.comparison || [];\nconst weekly = result.weekly || [];\nconst dates = [...new Set(comparison.map(row => row.day))].sort();\nconst borders = msg.comparePorts.map(port => {\n    const records = comparison.filter(row => row.port === port && Number.isFinite(row.resident));\n    const byDay = new Map(records.map(row => [row.day, row.resident]));\n    const weeklyByDay = new Map(weekly.filter(row => row.port === port && Number.isFinite(row.resident)).map(row => [row.day, row.resident]));\n    const weekValues = msg.weekDates.map(day => weeklyByDay.get(day) ?? null);\n    return {name: portNames[port], count: records.length, mean: mean(records.map(row => row.resident)), weekCount: weekValues.filter(value => value !== null).length, weekValues, points: dates.map(day => ({x: Date.parse(`${day}T12:00:00+08:00`), y: byDay.get(day) ?? null}))};\n});\nconst series = borders.map(border => border.name);\nreturn [\n    {socketid: msg.socketid, payload: data},\n    {socketid: msg.socketid, payload: [{series: [data.name], data: [days.map(row => ({x: Date.parse(`${row.day}T12:00:00+08:00`), y: row.resident}))], labels: ['']}]},\n    {socketid: msg.socketid, payload: [{series, data: borders.map(border => border.points), labels: ['']}]},\n    {socketid: msg.socketid, payload: [{series, data: borders.map(border => border.weekValues), labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']}]},\n    {socketid: msg.socketid, payload: {start: dates[0], end: dates.at(-1), requestedDays: msg.trendDays, weekStart: msg.weekStart, weekEnd: msg.weekEnd, borders}}\n];\n",
+    "outputs": 5,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "timeout": 30,
+    "g": "591ab56b57fc8151"
+  },
+  {
+    "id": "47a1e546bcafe6ee",
+    "type": "group",
+    "z": "3629cc25085416b8",
+    "name": "01 · MTR · every 10 seconds",
+    "style": {
+      "label": true,
+      "fill": "#f4f8fa",
+      "color": "#536b78"
+    },
+    "nodes": [
+      "4399f90b9dcca04f",
+      "d22fffffc38ba318",
+      "659b1602ed303817",
+      "f6dad7c5d7305ea0"
+    ],
+    "x": 44,
+    "y": 84,
+    "w": 1540,
+    "h": 95
+  },
+  {
+    "id": "0badabbca5a99859",
+    "type": "group",
+    "z": "3629cc25085416b8",
+    "name": "02 · Clearance and current weather · every 15 minutes",
+    "style": {
+      "label": true,
+      "fill": "#f4f8fa",
+      "color": "#536b78"
+    },
+    "nodes": [
+      "d7e38b19fd0a1e48",
+      "30f635c7806069d8",
+      "84df9a0251f86d54",
+      "89fbb740d4ef4b9e",
+      "4a065643e64e3e14",
+      "0c1754bb130880ae",
+      "1b408b82f95443c3",
+      "2803f9f32f619b67"
+    ],
+    "x": 44,
+    "y": 229,
+    "w": 1540,
+    "h": 180
+  },
+  {
+    "id": "c7b7f5b0f5c513da",
+    "type": "group",
+    "z": "3629cc25085416b8",
+    "name": "03 · Daily passenger and rainfall archives · check every 6 hours",
+    "style": {
+      "label": true,
+      "fill": "#f4f8fa",
+      "color": "#536b78"
+    },
+    "nodes": [
+      "f65950790eaf316d",
+      "89cdcacd8b6676b1",
+      "0f59d9fe759e1d44",
+      "76dd2e5ad8a845fd",
+      "2518841eabfaad7f",
+      "7a882d6632f5161d",
+      "d099b92d4c3dd010",
+      "1d92db9cc78a3604",
+      "86721bb17c5fb853",
+      "9280569d690ea7f6"
+    ],
+    "x": 44,
+    "y": 459,
+    "w": 1540,
+    "h": 180
+  },
+  {
+    "id": "591ab56b57fc8151",
+    "type": "group",
+    "z": "3629cc25085416b8",
+    "name": "04 · Read MongoDB → analyse → display",
+    "style": {
+      "label": true,
+      "fill": "#f4f8fa",
+      "color": "#536b78"
+    },
+    "nodes": [
+      "7a80835d27fc08d5",
+      "8e7bb1628df15b2d",
+      "579e01244de8f617",
+      "5d11d276c9d19f8c",
+      "8ee8821eb0e11260",
+      "f22049922afae9f8",
+      "50fbcef764bc055d",
+      "d0e4fc44a5919bab",
+      "cac197f2a866a020",
+      "f6d00208e146fd9c",
+      "dc889d54dc1cb658",
+      "4c5725786f98b4f9",
+      "046e3f6f3c6e755e",
+      "8d44d710731f145b",
+      "b2357165e2588684",
+      "0932dcccd39131c9",
+      "cf486baa06ef7f6a",
+      "f15e63f9096a5f4d",
+      "d6a74e1f89af5e22",
+      "e3d62571c6149972",
+      "f23bb77971322a9d",
+      "1fee3b6af83af1cd",
+      "299df15e615a7e8d",
+      "12768864a81f6405",
+      "031cb8107d93c6fd"
+    ],
+    "x": 44,
+    "y": 689,
+    "w": 1540,
+    "h": 435
+  },
+  {
+    "id": "7254a0eb17c7a44e",
+    "type": "group",
+    "z": "3629cc25085416b8",
+    "name": "05 · Indexes, health and errors",
+    "style": {
+      "label": true,
+      "fill": "#f4f8fa",
+      "color": "#536b78"
+    },
+    "nodes": [
+      "273c37d8ad554819",
+      "0a9d885fef3e649b",
+      "7ea24cb76271adcd",
+      "c1d5315b481e71e1",
+      "01ae5412f27d23a5",
+      "10d528d3f2689522",
+      "94172832a4e50772",
+      "588810013c533577"
+    ],
+    "x": 44,
+    "y": 1174,
+    "w": 1540,
+    "h": 180
+  }
+]
